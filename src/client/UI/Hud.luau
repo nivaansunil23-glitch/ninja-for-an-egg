@@ -1,17 +1,16 @@
 -- Always-on HUD: money and jump power pills, side menu buttons, the height
--- tracker on the right and the jetpack fuel bar.
+-- bar along the bottom (HeightBar) and the jetpack fuel bar.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))
-local PlayerConfig = require(Shared:WaitForChild("Config"):WaitForChild("PlayerConfig"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local HeightBar = require(script.Parent:WaitForChild("HeightBar"))
 
 local player = Players.LocalPlayer
 
@@ -34,6 +33,7 @@ local function makePill(parent: Instance, icon: string, colors, position: UDim2)
 	local minimum = Instance.new("UISizeConstraint")
 	minimum.MinSize = Vector2.new(140, 37)
 	minimum.Parent = pill
+	Components.Shine(pill, 0.4)
 
 	Components.Label({
 		Text = icon,
@@ -54,7 +54,8 @@ local function makePill(parent: Instance, icon: string, colors, position: UDim2)
 end
 
 local function makeSideButton(parent: Instance, icon: string, text: string, colors, order: number, onClick)
-	local button = Components.Button({
+	local button
+	button = Components.Button({
 		Name = text,
 		Text = icon,
 		Parent = parent,
@@ -66,11 +67,15 @@ local function makeSideButton(parent: Instance, icon: string, text: string, colo
 		LabelSize = UDim2.fromScale(0.7, 0.55),
 		LabelPosition = UDim2.fromScale(0.5, 0.38),
 		MaxTextSize = 60,
-		OnClick = onClick,
+		OnClick = function()
+			Components.Burst(button:FindFirstAncestorOfClass("ScreenGui"), Components.CenterOf(button), { "✨", "💖", "⭐" })
+			onClick()
+		end,
 	})
 	local aspect = Instance.new("UIAspectRatioConstraint")
 	aspect.AspectRatio = 1
 	aspect.Parent = button
+	Components.Shine(button, 0.4)
 	Components.Label({
 		Text = text,
 		Parent = button,
@@ -79,6 +84,18 @@ local function makeSideButton(parent: Instance, icon: string, text: string, colo
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 24,
 	})
+	-- Icon gently bobs and tilts, each button a little out of step.
+	local icon = button:FindFirstChild("Text")
+	if icon then
+		task.spawn(function()
+			local t = order * 0.7
+			while button.Parent do
+				t += task.wait()
+				icon.Rotation = math.sin(t * 2.2) * 6
+				icon.Position = UDim2.fromScale(0.5, 0.38 + math.sin(t * 3) * 0.02)
+			end
+		end)
+	end
 	return button
 end
 
@@ -105,111 +122,6 @@ local function popMoney(parent: Instance, pill: GuiObject, amount: number)
 	end
 	task.delay(1, function()
 		label:Destroy()
-	end)
-end
-
-local function groundY(): number
-	local value = Workspace:GetAttribute("GroundY")
-	return if type(value) == "number" then value else PlayerConfig.GroundY
-end
-
-local function buildHeightTracker(parent: Instance)
-	local holder = Instance.new("Frame")
-	holder.Name = "HeightTracker"
-	holder.BackgroundTransparency = 1
-	holder.Size = UDim2.fromScale(0.07, 0.58)
-	holder.Position = UDim2.fromScale(0.99, 0.55)
-	holder.AnchorPoint = Vector2.new(1, 0.5)
-	holder.Parent = parent
-
-	local heightLabel = Components.Label({
-		Text = "0m",
-		Parent = holder,
-		Size = UDim2.fromScale(1, 0.08),
-		MaxTextSize = 30,
-	})
-
-	local bar = Components.Box({
-		Name = "Bar",
-		Parent = holder,
-		Size = UDim2.fromScale(0.36, 0.8),
-		Position = UDim2.fromScale(0.5, 0.1),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Colors = { Color3.fromRGB(70, 60, 150), Color3.fromRGB(140, 220, 255) },
-		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 3,
-	})
-
-	local fill = Components.Box({
-		Name = "Fill",
-		Parent = bar,
-		Size = UDim2.fromScale(1, 0),
-		Position = UDim2.fromScale(0, 1),
-		AnchorPoint = Vector2.new(0, 1),
-		Colors = Theme.Colors.Pink,
-		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 0,
-	})
-
-	local bestMarker = Components.Box({
-		Name = "Best",
-		Parent = bar,
-		Size = UDim2.new(1.8, 0, 0, 6),
-		Position = UDim2.fromScale(0.5, 1),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Colors = Theme.Colors.Yellow,
-		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 2,
-		ZIndex = 2,
-	})
-
-	local you = Instance.new("ImageLabel")
-	you.Name = "You"
-	you.Size = UDim2.fromScale(1.9, 1.9)
-	you.SizeConstraint = Enum.SizeConstraint.RelativeXX
-	you.AnchorPoint = Vector2.new(0.5, 0.5)
-	you.Position = UDim2.fromScale(0.5, 1)
-	you.BackgroundColor3 = Color3.new(1, 1, 1)
-	you.ZIndex = 3
-	Components.Corner(you, UDim.new(1, 0))
-	Components.Stroke(you, 3)
-	you.Parent = bar
-	task.spawn(function()
-		local ok, image = pcall(function()
-			return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-		end)
-		if ok then
-			you.Image = image
-		end
-	end)
-
-	local bestLabel = Components.Label({
-		Text = "🏆 0m",
-		Parent = holder,
-		Size = UDim2.fromScale(1, 0.07),
-		Position = UDim2.fromScale(0, 0.93),
-		Color = Theme.Colors.Yellow[1],
-		MaxTextSize = 26,
-	})
-
-	local shownHeight = -1
-	RunService.RenderStepped:Connect(function()
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart")
-		local height = if root then math.max(0, math.floor(root.Position.Y - groundY())) else 0
-		local best = player:GetAttribute("BestHeight") or 0
-		local maxHeight = math.max(PlayerConfig.HeightTrackerMax, best * 1.1, 1)
-
-		local ratio = math.clamp(height / maxHeight, 0, 1)
-		fill.Size = UDim2.fromScale(1, ratio)
-		you.Position = UDim2.fromScale(0.5, 1 - ratio)
-		bestMarker.Position = UDim2.fromScale(0.5, 1 - math.clamp(best / maxHeight, 0, 1))
-
-		if height ~= shownHeight then
-			shownHeight = height
-			heightLabel.Text = Format.Short(height) .. "m"
-		end
-		bestLabel.Text = "🏆 " .. Format.Short(best) .. "m"
 	end)
 end
 
@@ -319,7 +231,7 @@ function Hud.Build(gui: ScreenGui, actions)
 	makeSideButton(side, "🐾", "Pets", Theme.Colors.Mint, 2, actions.Pets)
 	makeSideButton(side, "🎒", "Inventory", Theme.Colors.Sky, 3, actions.Inventory)
 
-	buildHeightTracker(gui)
+	HeightBar.Build(gui)
 	buildFuelBar(gui)
 end
 

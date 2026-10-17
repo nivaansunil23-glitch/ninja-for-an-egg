@@ -59,9 +59,7 @@ local MESSAGES = {
 	EggPlaced = function(i)
 		return "Egg growing", string.format("%s placed in your pen", i.Name)
 	end,
-	Hatched = function(i)
-		return "Hatched!", string.format("%s (%s, %.2f kg)", i.Pet.Name, i.Pet.Rarity, i.Pet.Weight)
-	end,
+	-- "Hatched" plays the hatch animation (UI/HatchReveal) instead of a toast.
 	PenUpgraded = function(i)
 		return "Pen upgraded!", string.format("Level %d · %d nests", i.Level, i.Nests)
 	end,
