@@ -1,4 +1,4 @@
--- Vertex shop: buy the next vertex tier to raise jump power.
+-- Vertex shop: buy the next vertex tier to multiply your trained jump power.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -31,7 +31,7 @@ function VertexShop.Buy(player: Player, tier): (boolean, string)
 
 	data.VertexTier = tier
 	PlayerData.MarkDirty(player)
-	return true, `Unlocked the {entry.Name}! Jump power {entry.JumpPower}`
+	return true, `Unlocked the {entry.Name}! {VertexConfig.PerkText(entry)}`
 end
 
 return VertexShop

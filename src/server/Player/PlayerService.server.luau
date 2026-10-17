@@ -1,59 +1,30 @@
--- Applies jump power (vertex tier + held gear), tracks best height and pays
--- out income from equipped pets.
+-- Applies jump power (trained level x vertex x held gear, see JumpPower),
+-- tracks best height and the highest island stood on, and pays out income
+-- from equipped pets.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Config = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config")
-local VertexConfig = require(Config:WaitForChild("VertexConfig"))
-local GearConfig = require(Config:WaitForChild("GearConfig"))
 local PlayerConfig = require(Config:WaitForChild("PlayerConfig"))
 local SellConfig = require(Config:WaitForChild("SellConfig"))
 local PlayerData = require(script.Parent:WaitForChild("PlayerData"))
+local JumpPower = require(script.Parent:WaitForChild("JumpPower"))
 
 local HEIGHT_CHECK_SECONDS = 0.5
 local INCOME_SECONDS = 1
-
-local function getJumpPower(player: Player): number
-	local data = PlayerData.Get(player)
-	local tier = VertexConfig.Get(data and data.VertexTier or 1)
-	local power = if tier then tier.JumpPower else VertexConfig.DefaultJumpPower
-
-	local character = player.Character
-	if character then
-		for _, child in character:GetChildren() do
-			if child:IsA("Tool") then
-				local gear = GearConfig.Items[child:GetAttribute("GearId")]
-				if gear and gear.JumpMultiplier then
-					power *= gear.JumpMultiplier
-				end
-			end
-		end
-	end
-	return math.floor(power + 0.5)
-end
-
-local function refreshJump(player: Player)
-	local power = getJumpPower(player)
-	player:SetAttribute("JumpPower", power)
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		humanoid.UseJumpPower = true
-		humanoid.JumpPower = power
-	end
-end
+local ISLAND_CHECK_DISTANCE = 7 -- studs below the root that still counts as standing on it
 
 local function onCharacter(player: Player, character: Model)
 	if not character:WaitForChild("Humanoid", 10) then
 		return
 	end
-	refreshJump(player)
+	JumpPower.Refresh(player)
 	-- Holding or putting away gear (e.g. the Jump Coil) changes jump power.
 	local function onToolChanged(child)
 		if child:IsA("Tool") then
-			refreshJump(player)
+			JumpPower.Refresh(player)
 		end
 	end
 	character.ChildAdded:Connect(onToolChanged)
@@ -75,11 +46,11 @@ for _, player in Players:GetPlayers() do
 end
 
 -- Buying a vertex goes through MarkDirty, which fires Changed.
-PlayerData.Loaded:Connect(refreshJump)
-PlayerData.Changed:Connect(refreshJump)
+PlayerData.Loaded:Connect(JumpPower.Refresh)
+PlayerData.Changed:Connect(JumpPower.Refresh)
 for _, player in Players:GetPlayers() do
 	if PlayerData.Get(player) then
-		refreshJump(player)
+		JumpPower.Refresh(player)
 	end
 end
 
@@ -88,18 +59,45 @@ local function groundY(): number
 	return if type(value) == "number" then value else PlayerConfig.GroundY
 end
 
--- Best height, checked on the server so it can't be faked by the client.
+local islandRay = RaycastParams.new()
+islandRay.FilterType = Enum.RaycastFilterType.Exclude
+
+-- The island number of whatever this part belongs to (nil if not an island).
+local function islandNumberOf(part: Instance): number?
+	local map = Workspace:FindFirstChild("Map")
+	local islands = map and map:FindFirstChild("Islands")
+	if not islands or not part:IsDescendantOf(islands) then
+		return nil
+	end
+	local node = part
+	while node.Parent ~= islands do
+		node = node.Parent
+	end
+	local number = node:GetAttribute("IslandNumber")
+	return if type(number) == "number" then number else nil
+end
+
+-- Best height and the highest island stood on, checked on the server so they
+-- can't be faked by the client.
 task.spawn(function()
 	while true do
 		task.wait(HEIGHT_CHECK_SECONDS)
 		local base = groundY()
 		for _, player in Players:GetPlayers() do
 			local data = PlayerData.Get(player)
-			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
 			if data and root then
 				local height = math.max(0, math.floor(root.Position.Y - base))
 				if height > data.BestHeight then
 					PlayerData.SetStat(player, "BestHeight", height)
+				end
+
+				islandRay.FilterDescendantsInstances = { character }
+				local hit = Workspace:Raycast(root.Position, Vector3.new(0, -ISLAND_CHECK_DISTANCE, 0), islandRay)
+				local island = hit and islandNumberOf(hit.Instance)
+				if island and island > data.IslandReached then
+					PlayerData.SetStat(player, "IslandReached", island)
 				end
 			end
 		end

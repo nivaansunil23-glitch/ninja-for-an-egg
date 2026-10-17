@@ -26,6 +26,11 @@ local TEMPLATE = {
 	Money = 0,
 	VertexTier = 1,
 	BestHeight = 0,
+	-- Jump training (Training/TrainingService, numbers in Shared.Config.JumpBalance)
+	JumpLevel = 1,
+	JumpXP = 0, -- XP into the current level
+	TrampolineTier = 1,
+	IslandReached = 0, -- highest island stood on (0 = base)
 	Gear = {}, -- [gearId] = true
 	Pets = {}, -- [petId] = { Name, Rarity, Weight, Egg, Value, Equipped }
 	Eggs = {}, -- free space for the egg systems (pens, growing eggs)
@@ -98,6 +103,10 @@ local function snapshot(data)
 		Money = data.Money,
 		VertexTier = data.VertexTier,
 		BestHeight = data.BestHeight,
+		JumpLevel = data.JumpLevel,
+		JumpXP = data.JumpXP,
+		TrampolineTier = data.TrampolineTier,
+		IslandReached = data.IslandReached,
 		Gear = data.Gear,
 		Pets = data.Pets,
 	}
@@ -117,6 +126,10 @@ local function applyAttributes(player: Player, data)
 	setMirrored(player, "Money", data.Money)
 	setMirrored(player, "BestHeight", data.BestHeight)
 	setMirrored(player, "VertexTier", data.VertexTier)
+	setMirrored(player, "JumpLevel", data.JumpLevel)
+	setMirrored(player, "JumpXP", data.JumpXP)
+	setMirrored(player, "TrampolineTier", data.TrampolineTier)
+	setMirrored(player, "IslandReached", data.IslandReached)
 end
 
 local function queueSync(player: Player)

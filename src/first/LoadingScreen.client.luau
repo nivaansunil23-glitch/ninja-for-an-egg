@@ -16,7 +16,12 @@ local FONT = Enum.Font.FredokaOne
 local OUTLINE = Color3.fromRGB(45, 25, 70)
 
 local TIPS = {
-	"Buy better vertices to jump to higher islands!",
+	"Bounce on the trampoline to train your jump!",
+	"Click while you bounce to train even faster!",
+	"Every island you reach unlocks a better trampoline.",
+	"Hold Shift (or tap Sprint) to run faster!",
+	"The big launch trampoline throws you 3x higher!",
+	"Better vertices make every jump higher.",
 	"Careful! Falling while holding an egg cracks it.",
 	"Heavier pets sell for more money.",
 	"Equip your best pets to earn money every second.",
