@@ -53,6 +53,19 @@ EggConfig.Settings = {
 	PetShowSeconds = 6, -- how long the hatched pet stands in the pen
 }
 
+-- Pen upgrade levels. Nests = how many nests are unlocked at that level (in
+-- NestIndex order). Price = money to reach that level. Prices are placeholders.
+-- A level can only be bought if the plot's pen has enough Nest parts for it.
+EggConfig.PenLevels = {
+	{ Nests = 2, Price = 0 },
+	{ Nests = 3, Price = 1000 },
+	{ Nests = 4, Price = 5000 },
+	{ Nests = 5, Price = 25000 },
+	{ Nests = 6, Price = 100000 },
+	{ Nests = 7, Price = 500000 },
+	{ Nests = 8, Price = 2000000 },
+}
+
 --[[
 Egg fields:
 	DisplayName       shown on the egg

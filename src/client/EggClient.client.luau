@@ -62,6 +62,9 @@ local MESSAGES = {
 	Hatched = function(i)
 		return "Hatched!", string.format("%s (%s, %.2f kg)", i.Pet.Name, i.Pet.Rarity, i.Pet.Weight)
 	end,
+	PenUpgraded = function(i)
+		return "Pen upgraded!", string.format("Level %d · %d nests", i.Level, i.Nests)
+	end,
 	Info = function(i)
 		return "Eggs", i.Text
 	end,

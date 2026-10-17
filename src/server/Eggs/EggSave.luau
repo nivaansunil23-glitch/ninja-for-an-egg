@@ -6,6 +6,7 @@
 --   WaitForData(player) -> data     data.Eggs is our saved table for pen eggs
 --   AddPet(player, pet) -> petId
 --   MarkDirty(player)
+--   SpendMoney(player, amount) -> bool   (pen upgrades)
 --
 -- If PlayerData isn't in the place yet, eggs keep working with in-memory data
 -- that isn't saved, so the egg code can be tried on its own.
@@ -68,6 +69,15 @@ function EggSave.AddPet(player, pet)
 	local id = game:GetService("HttpService"):GenerateGUID(false)
 	data.Pets[id] = pet
 	return id
+end
+
+-- Takes money for a purchase. Without PlayerData (egg code tried on its own) it's free.
+function EggSave.SpendMoney(player, amount)
+	local pd = getPlayerData()
+	if pd then
+		return pd.SpendMoney(player, amount)
+	end
+	return true
 end
 
 function EggSave.MarkDirty(player)

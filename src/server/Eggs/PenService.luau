@@ -12,8 +12,14 @@
 --     ...Sign (BasePart)                its SurfaceGui text shows the owner's name
 --                                       ("Empty Plot" when free); no text = billboard
 --
--- Set on the plot: OwnerUserId (0 when free), OwnerName attributes.
--- Set on the Player: PlotName attribute.
+--     ...UpgradeSign (with a "Board" part) gets an "Upgrade Pen" prompt and its
+--                                       SurfaceGui text shows the next level and price
+--
+-- Pen upgrades (EggConfig.PenLevels): level 1 unlocks the first nests by
+-- NestIndex; each paid level unlocks more. Saved as data.Eggs.PenLevel.
+--
+-- Set on the plot: OwnerUserId (0 when free), OwnerName, PenLevel attributes.
+-- Set on the Player: PlotName, PenLevel, PenNests attributes.
 -- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
 -- ReadyAt, so they keep growing while the player is offline.
 
@@ -22,6 +28,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
 local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
+local Format = require(ReplicatedStorage.Shared.Format)
 local EggCarry = require(script.Parent.EggCarry)
 local EggFactory = require(script.Parent.EggFactory)
 local EggMap = require(script.Parent.EggMap)
@@ -86,16 +93,22 @@ local function findNests(plotModel)
 		return a.Local.Z < b.Local.Z
 	end)
 	local seen = {}
-	for _, nest in nests do
+	for order, nest in nests do
 		local index = nest.Part:GetAttribute("NestIndex")
-		if index then
+		if type(index) == "number" then
 			nest.Key = "Nest" .. tostring(index)
+			nest.Index = index
 		else
 			seen[nest.Path] = (seen[nest.Path] or 0) + 1
 			nest.Key = nest.Path .. "#" .. seen[nest.Path]
+			nest.Index = order
 		end
 		nest.Local = nil
 	end
+	-- Nests unlock in NestIndex order as the pen is upgraded.
+	table.sort(nests, function(a, b)
+		return a.Index < b.Index
+	end)
 	return nests
 end
 
@@ -173,17 +186,57 @@ local function showVisual(nest)
 	nest.Timer = label
 end
 
+-- "Locked" label over nests the pen level hasn't unlocked yet.
+local function setLockLabel(nest, text)
+	local old = nest.Part:FindFirstChild("LockLabel")
+	if not text then
+		if old then
+			old:Destroy()
+		end
+		return
+	end
+	if old then
+		old.Text.Text = text
+		return
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "LockLabel"
+	gui.Size = UDim2.fromOffset(150, 34)
+	gui.StudsOffset = Vector3.new(0, nest.Part.Size.Y / 2 + 2.5, 0)
+	gui.MaxDistance = 60
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Name = "Text"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = Color3.fromRGB(255, 210, 120)
+	label.TextStrokeTransparency = 0.3
+	label.Text = text
+	label.Parent = gui
+	gui.Parent = nest.Part
+end
+
 local function refreshNest(nest)
 	local prompt = nest.Prompt
 	if not prompt then
 		return
 	end
 	if not nest.Egg then
-		prompt.ActionText = "Place Egg"
-		prompt.ObjectText = "Empty Pen"
-		prompt.Enabled = true
+		if nest.Unlocked then
+			setLockLabel(nest, nil)
+			prompt.ActionText = "Place Egg"
+			prompt.ObjectText = "Empty Nest"
+			prompt.Enabled = true
+		else
+			-- Nests unlock in order, so this one comes with the next level that has enough nests.
+			setLockLabel(nest, "🔒 Upgrade pen")
+			prompt.Enabled = false
+		end
 		return
 	end
+	setLockLabel(nest, nil)
 	local left = nest.Egg.ReadyAt - os.time()
 	if nest.Timer then
 		nest.Timer.Text = left > 0 and ("Egg " .. formatTime(left)) or "Ready to hatch!"
@@ -247,6 +300,10 @@ local function placeEgg(player, plot, nest)
 	end
 	if not EggCarry.IsCarrying(player) then
 		notify(player, "Info", { Text = "Bring an egg here to grow it." })
+		return
+	end
+	if not nest.Unlocked then
+		notify(player, "Info", { Text = "Upgrade your pen to use this nest." })
 		return
 	end
 	local data = EggSave.WaitForData(player)
@@ -363,6 +420,146 @@ local function setSign(plot, text)
 	label.Parent = gui
 end
 
+-- Pen upgrades ---------------------------------------------------------------
+
+local function getPenLevel(data)
+	local level = tonumber(data.Eggs.PenLevel) or 1
+	return math.clamp(math.floor(level), 1, #EggConfig.PenLevels)
+end
+
+-- The next level this plot can actually use (its pen needs enough Nest parts), or nil.
+local function nextLevel(plot, level)
+	local nextInfo = EggConfig.PenLevels[level + 1]
+	if nextInfo and nextInfo.Nests <= #plot.Nests then
+		return level + 1, nextInfo
+	end
+	return nil
+end
+
+local function findUpgradeBoard(plot)
+	local sign = plot.Model:FindFirstChild("UpgradeSign", true)
+	if not sign then
+		return nil
+	end
+	if sign:IsA("BasePart") then
+		return sign
+	end
+	local board = sign:FindFirstChild("Board")
+	if board and board:IsA("BasePart") then
+		return board
+	end
+	return sign:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function setBoardText(board, text)
+	for _, d in board:GetDescendants() do
+		if d:IsA("TextLabel") and d:FindFirstAncestorWhichIsA("SurfaceGui") then
+			d.Text = text
+			return
+		end
+	end
+end
+
+-- Locks/unlocks nests and updates the upgrade sign for the plot's current level.
+local function applyLevel(plot, level)
+	plot.Level = level
+	local unlocked = EggConfig.PenLevels[level].Nests
+	for order, nest in plot.Nests do
+		nest.Unlocked = order <= unlocked
+		refreshNest(nest)
+	end
+
+	local pen = plot.Model:FindFirstChild("Pen")
+	if pen then
+		pen:SetAttribute("Level", level)
+	end
+	plot.Model:SetAttribute("PenLevel", level)
+	if plot.Owner then
+		plot.Owner:SetAttribute("PenLevel", level)
+		plot.Owner:SetAttribute("PenNests", math.min(unlocked, #plot.Nests))
+	end
+
+	local board = plot.UpgradeBoard
+	if not board then
+		return
+	end
+	local nextLvl, nextInfo = nextLevel(plot, level)
+	local prompt = plot.UpgradePrompt
+	if nextLvl then
+		local price = Format.Money(nextInfo.Price)
+		setBoardText(board, string.format("Upgrade Pen\nLevel %d > Level %d\n%s", level, nextLvl, price))
+		if prompt then
+			prompt.ActionText = "Upgrade Pen"
+			prompt.ObjectText = string.format("Lv %d > %d · %d nests · %s", level, nextLvl, nextInfo.Nests, price)
+			prompt.Enabled = true
+		end
+	else
+		setBoardText(board, string.format("Pen Level %d\nMAX", level))
+		if prompt then
+			prompt.Enabled = false
+		end
+	end
+end
+
+local function buyUpgrade(player, plot)
+	if plot.Owner ~= player then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not plot.UpgradeBoard or (root.Position - plot.UpgradeBoard.Position).Magnitude > S.PenPromptDistance + 8 then
+		return
+	end
+	local data = EggSave.WaitForData(player)
+	if not data or plot.Owner ~= player then
+		return
+	end
+	local level = getPenLevel(data)
+	local nextLvl, nextInfo = nextLevel(plot, level)
+	if not nextLvl then
+		notify(player, "Info", { Text = "Your pen is already max level." })
+		return
+	end
+	if not EggSave.SpendMoney(player, nextInfo.Price) then
+		notify(player, "Info", { Text = `You need {Format.Money(nextInfo.Price)} to upgrade your pen.` })
+		return
+	end
+	data.Eggs.PenLevel = nextLvl
+	EggSave.MarkDirty(player)
+	applyLevel(plot, nextLvl)
+	notify(player, "PenUpgraded", { Level = nextLvl, Nests = nextInfo.Nests })
+end
+
+local function setupUpgradeSign(player, plot)
+	local board = findUpgradeBoard(plot)
+	plot.UpgradeBoard = board
+	if not board then
+		return
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "UpgradePrompt"
+	prompt.MaxActivationDistance = S.PenPromptDistance
+	prompt.HoldDuration = 0.5
+	prompt.RequiresLineOfSight = false
+	prompt:SetAttribute("OwnerUserId", player.UserId)
+	prompt.Triggered:Connect(function(who)
+		buyUpgrade(who, plot)
+	end)
+	prompt.Parent = board
+	plot.UpgradePrompt = prompt
+end
+
+local function clearUpgradeSign(plot)
+	if plot.UpgradePrompt then
+		plot.UpgradePrompt:Destroy()
+		plot.UpgradePrompt = nil
+	end
+	if plot.UpgradeBoard then
+		setBoardText(plot.UpgradeBoard, "Upgrade Pen\nLevel 1")
+	end
+	plot.UpgradeBoard = nil
+end
+
 local function assignPlot(player)
 	local data = EggSave.WaitForData(player)
 	if not data or not player.Parent or playerPlot[player] then
@@ -435,8 +632,9 @@ local function assignPlot(player)
 		if nest.Egg then
 			showVisual(nest)
 		end
-		refreshNest(nest)
 	end
+	setupUpgradeSign(player, plot)
+	applyLevel(plot, getPenLevel(data))
 end
 
 local function releasePlot(player)
@@ -448,14 +646,22 @@ local function releasePlot(player)
 	plot.Owner = nil
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.Model:SetAttribute("OwnerName", nil)
+	plot.Model:SetAttribute("PenLevel", nil)
+	local pen = plot.Model:FindFirstChild("Pen")
+	if pen then
+		pen:SetAttribute("Level", 1)
+	end
 	setSign(plot, nil)
+	clearUpgradeSign(plot)
 	for _, nest in plot.Nests do
 		clearVisual(nest)
+		setLockLabel(nest, nil)
 		if nest.Prompt then
 			nest.Prompt:Destroy()
 			nest.Prompt = nil
 		end
 		nest.Egg = nil
+		nest.Unlocked = false
 	end
 end
 
