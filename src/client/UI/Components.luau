@@ -69,7 +69,9 @@ function Components.Label(props)
 	label.TextColor3 = props.Color or Theme.Text
 	label.TextScaled = true
 	label.TextWrapped = props.Wrapped == true
+	label.RichText = props.RichText == true
 	label.TextXAlignment = props.XAlign or Enum.TextXAlignment.Center
+	label.TextYAlignment = props.YAlign or Enum.TextYAlignment.Center
 	label.Size = props.Size or UDim2.fromScale(1, 1)
 	label.Position = props.Position or UDim2.new()
 	label.AnchorPoint = props.AnchorPoint or Vector2.zero
@@ -141,6 +143,85 @@ function Components.Button(props)
 
 	button.Parent = props.Parent
 	return button, label
+end
+
+-- Glossy highlight across the top of a box or button.
+function Components.Shine(parent: GuiObject, strength: number?)
+	local shine = Instance.new("Frame")
+	shine.Name = "Shine"
+	shine.BackgroundColor3 = Color3.new(1, 1, 1)
+	shine.BackgroundTransparency = 1 - (strength or 0.45)
+	shine.BorderSizePixel = 0
+	shine.Size = UDim2.fromScale(0.86, 0.36)
+	shine.Position = UDim2.fromScale(0.07, 0.07)
+	shine.ZIndex = parent.ZIndex
+	Components.Corner(shine, UDim.new(1, 0))
+	local fade = Instance.new("UIGradient")
+	fade.Rotation = 90
+	fade.Transparency = NumberSequence.new(0, 1)
+	fade.Parent = shine
+	shine.Parent = parent
+	return shine
+end
+
+-- Small rounded tag like "EPIC" or "NEXT!".
+function Components.Tag(props)
+	local tag = Components.Box({
+		Name = props.Name or "Tag",
+		Parent = props.Parent,
+		Size = props.Size or UDim2.fromOffset(80, 26),
+		Position = props.Position,
+		AnchorPoint = props.AnchorPoint,
+		Colors = props.Colors,
+		CornerRadius = UDim.new(1, 0),
+		StrokeThickness = props.StrokeThickness or 2.5,
+		ZIndex = props.ZIndex,
+	})
+	tag.Rotation = props.Rotation or 0
+	local label = Components.Label({
+		Name = "Text",
+		Text = props.Text,
+		Parent = tag,
+		Size = UDim2.fromScale(0.84, 0.72),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		MaxTextSize = props.MaxTextSize or 18,
+		ZIndex = props.ZIndex,
+	})
+	return tag, label
+end
+
+-- A few sparkles that fly out from a point on the screen and fade away.
+function Components.Burst(gui: LayerCollector, at: Vector2, icons: { string }?)
+	icons = icons or { "✨", "⭐", "💫" }
+	for i = 1, 7 do
+		local angle = (i / 7) * math.pi * 2 + math.random() * 0.6
+		local distance = math.random(60, 110)
+		local spark = Components.Label({
+			Text = icons[math.random(#icons)],
+			Parent = gui,
+			Size = UDim2.fromOffset(30, 30),
+			Position = UDim2.fromOffset(at.X, at.Y),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			MaxTextSize = 30,
+			StrokeThickness = 0,
+			ZIndex = 60,
+		})
+		local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(spark, info, {
+			Position = UDim2.fromOffset(at.X + math.cos(angle) * distance, at.Y + math.sin(angle) * distance),
+			TextTransparency = 1,
+			Rotation = math.random(-90, 90),
+		}):Play()
+		task.delay(0.65, function()
+			spark:Destroy()
+		end)
+	end
+end
+
+-- Center of a GuiObject in its ScreenGui's space (for Burst).
+function Components.CenterOf(object: GuiObject): Vector2
+	return object.AbsolutePosition + object.AbsoluteSize / 2
 end
 
 -- Quick squash-and-stretch on any GuiObject that has (or gets) a UIScale.
@@ -257,7 +338,15 @@ function Components.Window(props)
 		Frame = frame,
 		Content = content,
 		Title = title,
+		Ribbon = ribbon,
 	}
+
+	function window.SetTitle(text: string, colors)
+		title.Text = text
+		if colors then
+			Components.SetColors(ribbon, colors)
+		end
+	end
 
 	function window.Open()
 		local target = fitScale()
