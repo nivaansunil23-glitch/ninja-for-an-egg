@@ -1,14 +1,18 @@
 --!nonstrict
--- Pens: each player gets one plot from Workspace.Map.Pens. Every BasePart named
--- "Nest" inside a plot is one pen slot. Bring a carried egg to your nest to
--- place it, wait out the grow countdown, then hatch it into a pet.
+-- Pens: every player automatically claims a free plot from Workspace.Map.Pens
+-- when they join, and frees it when they leave. Each plot has one big pen with
+-- several "Nest" parts; every Nest holds one egg. Bring a carried egg to one of
+-- your nests to place it, wait out the grow countdown, then hatch it into a pet.
 --
 -- Plot setup (done in the map):
---   Workspace.Map.Pens.<PlotName>       one Model per player plot
---     ...Nest (BasePart)                where an egg sits; any depth inside the plot
---     ...Sign (BasePart, optional)      gets an "owner's pens" label
+--   Workspace.Map.Pens.<PlotName>       one Model per player plot (PlotId attribute sorts them)
+--     ...Nest (BasePart)                one per egg slot, any depth inside the plot.
+--                                       Optional "NestIndex" attribute keeps saves stable.
+--       EggSpot (optional sibling or child) where the egg's bottom sits
+--     ...Sign (BasePart)                its SurfaceGui text shows the owner's name
+--                                       ("Empty Plot" when free); no text = billboard
 --
--- Set on the plot while owned: OwnerUserId, OwnerName attributes.
+-- Set on the plot: OwnerUserId (0 when free), OwnerName attributes.
 -- Set on the Player: PlotName attribute.
 -- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
 -- ReadyAt, so they keep growing while the player is offline.
@@ -54,21 +58,59 @@ local function formatTime(seconds)
 	return string.format("%ds", s)
 end
 
-local function nestKey(plotModel, nestPart)
+local function nestPath(plotModel, nestPart)
 	return string.sub(nestPart:GetFullName(), #plotModel:GetFullName() + 2)
 end
 
+-- Several nests in one big pen can share the name "Nest", so keys come from a
+-- NestIndex attribute when there is one, otherwise the path plus a number
+-- counted in a fixed order (left to right, front to back) inside the plot.
 local function findNests(plotModel)
 	local nests = {}
 	for _, d in plotModel:GetDescendants() do
 		if d:IsA("BasePart") and d.Name == "Nest" then
-			table.insert(nests, { Key = nestKey(plotModel, d), Part = d })
+			table.insert(nests, { Path = nestPath(plotModel, d), Part = d })
 		end
 	end
+	local pivot = plotModel:GetPivot()
+	for _, nest in nests do
+		nest.Local = pivot:PointToObjectSpace(nest.Part.Position)
+	end
 	table.sort(nests, function(a, b)
-		return a.Key < b.Key
+		if a.Path ~= b.Path then
+			return a.Path < b.Path
+		end
+		if math.abs(a.Local.X - b.Local.X) > 0.5 then
+			return a.Local.X < b.Local.X
+		end
+		return a.Local.Z < b.Local.Z
 	end)
+	local seen = {}
+	for _, nest in nests do
+		local index = nest.Part:GetAttribute("NestIndex")
+		if index then
+			nest.Key = "Nest" .. tostring(index)
+		else
+			seen[nest.Path] = (seen[nest.Path] or 0) + 1
+			nest.Key = nest.Path .. "#" .. seen[nest.Path]
+		end
+		nest.Local = nil
+	end
 	return nests
+end
+
+-- Where the egg's bottom sits: an EggSpot next to or inside the nest, else the nest top.
+local function eggBase(nest)
+	local spot = nest.Part:FindFirstChild("EggSpot")
+		or (nest.Part.Parent and nest.Part.Parent:FindFirstChild("EggSpot"))
+	if spot and spot:IsA("BasePart") then
+		-- Only trust a sibling spot when it's actually above this nest.
+		local offset = spot.Position - nest.Part.Position
+		if Vector3.new(offset.X, 0, offset.Z).Magnitude < math.max(nest.Part.Size.X, nest.Part.Size.Z) then
+			return CFrame.new(spot.Position) * nest.Part.CFrame.Rotation
+		end
+	end
+	return nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2, 0)
 end
 
 local function addPlot(plotModel)
@@ -92,7 +134,7 @@ local function showVisual(nest)
 	local data = nest.Egg
 	local part = EggFactory.Build(data)
 	part.Anchored = true
-	part.CFrame = nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2 + part.Size.Y / 2, 0)
+	part.CFrame = eggBase(nest) * CFrame.new(0, part.Size.Y / 2, 0)
 	part:SetAttribute("State", "Pen")
 	part:SetAttribute("ReadyAt", data.ReadyAt)
 
@@ -171,7 +213,7 @@ local function showPet(nest, pet)
 	ball.Color = EggConfig.RarityColors[pet.Rarity] or Color3.new(1, 1, 1)
 	ball.Anchored = true
 	ball.CanCollide = false
-	ball.CFrame = nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2 + ball.Size.Y / 2 + 1, 0)
+	ball.CFrame = eggBase(nest) * CFrame.new(0, ball.Size.Y / 2 + 1, 0)
 
 	local sparkles = Instance.new("Sparkles")
 	sparkles.SparkleColor = ball.Color
@@ -271,11 +313,32 @@ local function makePrompt(player, plot, nest)
 	nest.Prompt = prompt
 end
 
+local EMPTY_SIGN_TEXT = "Empty Plot"
+
+-- Writes the owner's name on the plot sign (nil = free plot). Uses the sign's
+-- own SurfaceGui text if it has one, otherwise floats a label above it.
 local function setSign(plot, text)
-	local sign = plot.Model:FindFirstChild("Sign", true) or plot.Model.PrimaryPart
-	if not sign or not sign:IsA("BasePart") then
+	local sign = plot.Model:FindFirstChild("Sign", true)
+	if sign and not sign:IsA("BasePart") then
+		sign = sign:FindFirstChildWhichIsA("BasePart", true)
+	end
+	sign = sign or plot.Model.PrimaryPart
+	if not sign then
 		return
 	end
+
+	local surfaceText = nil
+	for _, d in sign:GetDescendants() do
+		if (d:IsA("TextLabel") or d:IsA("TextBox")) and d:FindFirstAncestorWhichIsA("SurfaceGui") then
+			surfaceText = d
+			break
+		end
+	end
+	if surfaceText then
+		surfaceText.Text = text or EMPTY_SIGN_TEXT
+		return
+	end
+
 	local old = sign:FindFirstChild("OwnerLabel")
 	if old then
 		old:Destroy()
@@ -313,6 +376,11 @@ local function assignPlot(player)
 		end
 	end
 	table.sort(free, function(a, b)
+		local ia = a.Model:GetAttribute("PlotId")
+		local ib = b.Model:GetAttribute("PlotId")
+		if type(ia) == "number" and type(ib) == "number" and ia ~= ib then
+			return ia < ib
+		end
 		return a.Model.Name < b.Model.Name
 	end)
 	local plot = free[1]
@@ -322,12 +390,18 @@ local function assignPlot(player)
 		return
 	end
 
+	-- Re-read the nests in case the map changed since the server started.
+	plot.Nests = findNests(plot.Model)
 	plot.Owner = player
 	playerPlot[player] = plot
 	plot.Model:SetAttribute("OwnerUserId", player.UserId)
 	plot.Model:SetAttribute("OwnerName", player.DisplayName)
 	player:SetAttribute("PlotName", plot.Model.Name)
-	setSign(plot, player.DisplayName .. "'s Pens")
+	setSign(plot, player.DisplayName .. "'s Pen")
+	notify(player, "Info", { Text = `You claimed {plot.Model.Name}! Bring eggs to your pen.` })
+	if #plot.Nests == 0 then
+		warn(`[Eggs] {plot.Model:GetFullName()} has no parts named "Nest", so eggs can't be placed there.`)
+	end
 
 	-- Put saved eggs back in their nests. Eggs whose nest no longer exists
 	-- (map changed) move to any empty nest; if none, they stay saved.
@@ -372,7 +446,7 @@ local function releasePlot(player)
 	end
 	playerPlot[player] = nil
 	plot.Owner = nil
-	plot.Model:SetAttribute("OwnerUserId", nil)
+	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.Model:SetAttribute("OwnerName", nil)
 	setSign(plot, nil)
 	for _, nest in plot.Nests do
