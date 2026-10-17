@@ -27,7 +27,7 @@ local BAR_COLORS = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.68, Color3.fromRGB(255, 150, 45)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(240, 60, 70)),
 })
-local LOCKED = { Color3.fromRGB(150, 145, 175), Color3.fromRGB(95, 85, 125) }
+local LOCKED = { Color3.fromRGB(60, 80, 130), Color3.fromRGB(25, 35, 70) } -- dark navy "?" like Jump for Phonk
 local UNLOCK_POP = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 local function groundY(): number
