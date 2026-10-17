@@ -62,10 +62,12 @@ function EggSave.AddPet(player, pet)
 		return pd.AddPet(player, pet)
 	end
 	local data = EggSave.WaitForData(player)
-	if data then
-		table.insert(data.Pets, pet)
+	if not data then
+		return nil
 	end
-	return nil
+	local id = game:GetService("HttpService"):GenerateGUID(false)
+	data.Pets[id] = pet
+	return id
 end
 
 function EggSave.MarkDirty(player)
