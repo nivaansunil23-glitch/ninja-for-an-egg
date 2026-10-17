@@ -1,0 +1,454 @@
+--!nonstrict
+-- Pens: each player gets one plot from Workspace.Map.Pens. Every BasePart named
+-- "Nest" inside a plot is one pen slot. Bring a carried egg to your nest to
+-- place it, wait out the grow countdown, then hatch it into a pet.
+--
+-- Plot setup (done in the map):
+--   Workspace.Map.Pens.<PlotName>       one Model per player plot
+--     ...Nest (BasePart)                where an egg sits; any depth inside the plot
+--     ...Sign (BasePart, optional)      gets an "owner's pens" label
+--
+-- Set on the plot while owned: OwnerUserId, OwnerName attributes.
+-- Set on the Player: PlotName attribute.
+-- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
+-- ReadyAt, so they keep growing while the player is offline.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
+local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
+local EggCarry = require(script.Parent.EggCarry)
+local EggFactory = require(script.Parent.EggFactory)
+local EggMap = require(script.Parent.EggMap)
+local EggSave = require(script.Parent.EggSave)
+local Hatching = require(script.Parent.Hatching)
+
+local S = EggConfig.Settings
+
+local PenService = {}
+
+local plots = {} -- [Model] = { Model, Owner, Nests = { nest } }
+local playerPlot = {} -- [Player] = plot state
+local pensFolder = nil
+
+-- nest = { Key, Part, Prompt, Egg, Visual, Timer }
+
+local function notify(player, kind, info)
+	EggRemotes.EggNotify:FireClient(player, kind, info)
+end
+
+local function formatTime(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	local d = seconds // 86400
+	local h = (seconds % 86400) // 3600
+	local m = (seconds % 3600) // 60
+	local s = seconds % 60
+	if d > 0 then
+		return string.format("%dd %dh", d, h)
+	elseif h > 0 then
+		return string.format("%dh %dm", h, m)
+	elseif m > 0 then
+		return string.format("%dm %02ds", m, s)
+	end
+	return string.format("%ds", s)
+end
+
+local function nestKey(plotModel, nestPart)
+	return string.sub(nestPart:GetFullName(), #plotModel:GetFullName() + 2)
+end
+
+local function findNests(plotModel)
+	local nests = {}
+	for _, d in plotModel:GetDescendants() do
+		if d:IsA("BasePart") and d.Name == "Nest" then
+			table.insert(nests, { Key = nestKey(plotModel, d), Part = d })
+		end
+	end
+	table.sort(nests, function(a, b)
+		return a.Key < b.Key
+	end)
+	return nests
+end
+
+local function addPlot(plotModel)
+	if plots[plotModel] or not plotModel:IsA("Model") then
+		return
+	end
+	plots[plotModel] = { Model = plotModel, Owner = nil, Nests = findNests(plotModel) }
+end
+
+local function clearVisual(nest)
+	if nest.Visual then
+		nest.Visual:Destroy()
+		nest.Visual = nil
+		nest.Timer = nil
+	end
+end
+
+-- Glowing, steaming egg sitting on the nest with a countdown above it.
+local function showVisual(nest)
+	clearVisual(nest)
+	local data = nest.Egg
+	local part = EggFactory.Build(data)
+	part.Anchored = true
+	part.CFrame = nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2 + part.Size.Y / 2, 0)
+	part:SetAttribute("State", "Pen")
+	part:SetAttribute("ReadyAt", data.ReadyAt)
+
+	local light = Instance.new("PointLight")
+	light.Brightness = 1.5
+	light.Range = 10
+	light.Color = Color3.new(1, 1, 1)
+	light.Parent = part
+
+	local steam = Instance.new("Smoke")
+	steam.Color = Color3.new(1, 1, 1)
+	steam.Opacity = 0.08
+	steam.RiseVelocity = 2
+	steam.Size = 1
+	steam.Parent = part
+
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Timer"
+	gui.Size = UDim2.fromOffset(160, 36)
+	gui.StudsOffset = Vector3.new(0, part.Size.Y / 2 + 3.2, 0)
+	gui.MaxDistance = 80
+	gui.LightInfluence = 0
+	gui.Parent = part
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = Color3.fromRGB(255, 255, 140)
+	label.TextStrokeTransparency = 0.3
+	label.Parent = gui
+
+	part.Parent = nest.Part
+	nest.Visual = part
+	nest.Timer = label
+end
+
+local function refreshNest(nest)
+	local prompt = nest.Prompt
+	if not prompt then
+		return
+	end
+	if not nest.Egg then
+		prompt.ActionText = "Place Egg"
+		prompt.ObjectText = "Empty Pen"
+		prompt.Enabled = true
+		return
+	end
+	local left = nest.Egg.ReadyAt - os.time()
+	if nest.Timer then
+		nest.Timer.Text = left > 0 and ("Egg " .. formatTime(left)) or "Ready to hatch!"
+	end
+	if left > 0 then
+		prompt.Enabled = false
+	else
+		prompt.ActionText = "Hatch"
+		prompt.ObjectText = EggConfig.Eggs[nest.Egg.EggId].DisplayName
+		prompt.Enabled = true
+	end
+end
+
+local function nearNest(player, nest)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return root and (root.Position - nest.Part.Position).Magnitude <= S.PenPromptDistance + 6
+end
+
+-- A placeholder pet (glowing ball in its rarity color) until pet models exist.
+local function showPet(nest, pet)
+	local ball = Instance.new("Part")
+	ball.Name = "HatchedPet"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.one * math.clamp(2 + pet.Weight * 0.15, 2, 8)
+	ball.Material = Enum.Material.Neon
+	ball.Color = EggConfig.RarityColors[pet.Rarity] or Color3.new(1, 1, 1)
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CFrame = nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2 + ball.Size.Y / 2 + 1, 0)
+
+	local sparkles = Instance.new("Sparkles")
+	sparkles.SparkleColor = ball.Color
+	sparkles.Parent = ball
+
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(200, 50)
+	gui.StudsOffset = Vector3.new(0, ball.Size.Y / 2 + 1.5, 0)
+	gui.LightInfluence = 0
+	gui.Parent = ball
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.RichText = true
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = ball.Color
+	label.TextStrokeTransparency = 0.2
+	label.Text = string.format("<b>%s</b>\n%s · %.2f kg", pet.Name, pet.Rarity, pet.Weight)
+	label.Parent = gui
+
+	ball.Parent = nest.Part
+	task.delay(S.PetShowSeconds, function()
+		ball:Destroy()
+	end)
+end
+
+local function placeEgg(player, plot, nest)
+	if nest.Egg or not nearNest(player, nest) then
+		return
+	end
+	if not EggCarry.IsCarrying(player) then
+		notify(player, "Info", { Text = "Bring an egg here to grow it." })
+		return
+	end
+	local data = EggSave.WaitForData(player)
+	if not data or plot.Owner ~= player or nest.Egg then
+		return
+	end
+	local egg = EggCarry.TakeCarried(player)
+	if not egg then
+		return
+	end
+	local def = EggConfig.Eggs[egg.EggId]
+	egg.ReadyAt = os.time() + math.floor(def.GrowSeconds + def.GrowSecondsPerKg * egg.Kg)
+	nest.Egg = egg
+	data.Eggs.Pens[nest.Key] = egg
+	EggSave.MarkDirty(player)
+	showVisual(nest)
+	refreshNest(nest)
+	local info = EggFactory.Info(egg)
+	info.ReadyAt = egg.ReadyAt
+	notify(player, "EggPlaced", info)
+end
+
+local function hatchEgg(player, plot, nest)
+	local egg = nest.Egg
+	if not egg or os.time() < egg.ReadyAt or not nearNest(player, nest) then
+		return
+	end
+	local data = EggSave.WaitForData(player)
+	if not data or plot.Owner ~= player or nest.Egg ~= egg then
+		return
+	end
+	-- Clear the pen before anything else so it can't hatch twice.
+	nest.Egg = nil
+	data.Eggs.Pens[nest.Key] = nil
+	clearVisual(nest)
+	refreshNest(nest)
+
+	local pet = Hatching.Roll(egg)
+	pet.Id = EggSave.AddPet(player, pet)
+	EggSave.MarkDirty(player)
+	showPet(nest, pet)
+	notify(player, "Hatched", { Pet = pet, EggId = egg.EggId, Name = EggConfig.Eggs[egg.EggId].DisplayName })
+end
+
+local function makePrompt(player, plot, nest)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "PenPrompt"
+	prompt.MaxActivationDistance = S.PenPromptDistance
+	prompt.HoldDuration = 0.3
+	prompt.RequiresLineOfSight = false
+	-- The client script hides this prompt for everyone but the owner.
+	prompt:SetAttribute("OwnerUserId", player.UserId)
+	prompt.Triggered:Connect(function(who)
+		if who ~= plot.Owner then
+			return
+		end
+		if nest.Egg then
+			hatchEgg(who, plot, nest)
+		else
+			placeEgg(who, plot, nest)
+		end
+	end)
+	prompt.Parent = nest.Part
+	nest.Prompt = prompt
+end
+
+local function setSign(plot, text)
+	local sign = plot.Model:FindFirstChild("Sign", true) or plot.Model.PrimaryPart
+	if not sign or not sign:IsA("BasePart") then
+		return
+	end
+	local old = sign:FindFirstChild("OwnerLabel")
+	if old then
+		old:Destroy()
+	end
+	if not text then
+		return
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "OwnerLabel"
+	gui.Size = UDim2.fromOffset(220, 40)
+	gui.StudsOffset = Vector3.new(0, sign.Size.Y / 2 + 2, 0)
+	gui.LightInfluence = 0
+	gui.Parent = sign
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextStrokeTransparency = 0.2
+	label.Text = text
+	label.Parent = gui
+end
+
+local function assignPlot(player)
+	local data = EggSave.WaitForData(player)
+	if not data or not player.Parent or playerPlot[player] then
+		return
+	end
+
+	local free = {}
+	for _, plot in plots do
+		if not plot.Owner then
+			table.insert(free, plot)
+		end
+	end
+	table.sort(free, function(a, b)
+		return a.Model.Name < b.Model.Name
+	end)
+	local plot = free[1]
+	if not plot then
+		warn(`[Eggs] No free pen plot for {player.Name}.`)
+		notify(player, "Info", { Text = "No free pen right now. Your eggs are safe." })
+		return
+	end
+
+	plot.Owner = player
+	playerPlot[player] = plot
+	plot.Model:SetAttribute("OwnerUserId", player.UserId)
+	plot.Model:SetAttribute("OwnerName", player.DisplayName)
+	player:SetAttribute("PlotName", plot.Model.Name)
+	setSign(plot, player.DisplayName .. "'s Pens")
+
+	-- Put saved eggs back in their nests. Eggs whose nest no longer exists
+	-- (map changed) move to any empty nest; if none, they stay saved.
+	local saved = data.Eggs.Pens
+	local homeless = {}
+	local byKey = {}
+	for _, nest in plot.Nests do
+		byKey[nest.Key] = nest
+	end
+	for key, egg in saved do
+		local nest = byKey[key]
+		if nest then
+			nest.Egg = egg
+		elseif EggConfig.Eggs[egg.EggId] then
+			table.insert(homeless, key)
+		end
+	end
+	for _, key in homeless do
+		for _, nest in plot.Nests do
+			if not nest.Egg then
+				nest.Egg = saved[key]
+				saved[nest.Key] = saved[key]
+				saved[key] = nil
+				break
+			end
+		end
+	end
+
+	for _, nest in plot.Nests do
+		makePrompt(player, plot, nest)
+		if nest.Egg then
+			showVisual(nest)
+		end
+		refreshNest(nest)
+	end
+end
+
+local function releasePlot(player)
+	local plot = playerPlot[player]
+	if not plot then
+		return
+	end
+	playerPlot[player] = nil
+	plot.Owner = nil
+	plot.Model:SetAttribute("OwnerUserId", nil)
+	plot.Model:SetAttribute("OwnerName", nil)
+	setSign(plot, nil)
+	for _, nest in plot.Nests do
+		clearVisual(nest)
+		if nest.Prompt then
+			nest.Prompt:Destroy()
+			nest.Prompt = nil
+		end
+		nest.Egg = nil
+	end
+end
+
+-- The plot a player owns, or nil.
+function PenService.GetPlot(player)
+	local plot = playerPlot[player]
+	return plot and plot.Model
+end
+
+-- Seconds left on each of the player's pens, for a pen timer UI.
+-- Returns { { Key, EggId, Name, ReadyAt, SecondsLeft } }
+function PenService.GetPenEggs(player)
+	local result = {}
+	local plot = playerPlot[player]
+	if not plot then
+		return result
+	end
+	for _, nest in plot.Nests do
+		if nest.Egg then
+			table.insert(result, {
+				Key = nest.Key,
+				EggId = nest.Egg.EggId,
+				Name = EggConfig.Eggs[nest.Egg.EggId].DisplayName,
+				ReadyAt = nest.Egg.ReadyAt,
+				SecondsLeft = math.max(0, nest.Egg.ReadyAt - os.time()),
+			})
+		end
+	end
+	return result
+end
+
+function PenService.Start()
+	task.spawn(function()
+		pensFolder = EggMap.WaitForFolder("Pens")
+		for _, plotModel in pensFolder:GetChildren() do
+			addPlot(plotModel)
+		end
+		pensFolder.ChildAdded:Connect(function(plotModel)
+			addPlot(plotModel)
+		end)
+
+		for _, player in Players:GetPlayers() do
+			task.spawn(assignPlot, player)
+		end
+		Players.PlayerAdded:Connect(assignPlot)
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		releasePlot(player)
+		EggSave.Forget(player)
+	end)
+
+	-- Countdown labels and "ready" prompts.
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for _, plot in plots do
+				if plot.Owner then
+					for _, nest in plot.Nests do
+						if nest.Egg then
+							refreshNest(nest)
+						end
+					end
+				end
+			end
+		end
+	end)
+end
+
+return PenService
