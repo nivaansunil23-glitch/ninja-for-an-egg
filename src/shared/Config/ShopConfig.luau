@@ -2,22 +2,23 @@
 -- The conversation itself lives in the client (UI/ShopTalk); prices, pet
 -- values and vertex numbers in it are filled in live.
 --
--- Rename a shopkeeper in Studio with a "KeeperName" attribute on the
--- Shopkeeper model (or on the shop model).
+-- A shopkeeper's name comes from the "DisplayName" (or "KeeperName") attribute
+-- on its Shopkeeper model in Studio; Keeper below is only the fallback.
 
 local ShopConfig = {}
 
--- How close you have to be to see the Talk prompt, and how far you can walk
--- away before the conversation (and the shop it opened) closes.
-ShopConfig.TalkDistance = 12
-ShopConfig.LeaveDistance = 24
+-- How close you have to be to see the Talk prompt (measured to the
+-- shopkeeper, who stands behind the counter), and how far you can walk away
+-- before the conversation (and the shop it opened) closes.
+ShopConfig.TalkDistance = 16
+ShopConfig.LeaveDistance = 28
 
 ShopConfig.NeverMind = "👋 Never mind"
 
 ShopConfig.Shops = {
 	Gear = {
 		Title = "Gear Shop",
-		Keeper = "Gizmo",
+		Keeper = "Gear Guy",
 		Icon = "🛠️",
 		Color = "Pink", -- a Theme.Colors name
 		Greetings = {
@@ -35,7 +36,7 @@ ShopConfig.Shops = {
 	},
 	Sell = {
 		Title = "Sell Shop",
-		Keeper = "Penny",
+		Keeper = "Seller",
 		Icon = "💰",
 		Color = "Yellow",
 		Greetings = {
@@ -55,7 +56,7 @@ ShopConfig.Shops = {
 	},
 	Vertex = {
 		Title = "Vertex Shop",
-		Keeper = "Sensei Hop",
+		Keeper = "Vertex Wizard",
 		Icon = "💎",
 		Color = "Sky",
 		Greetings = {
