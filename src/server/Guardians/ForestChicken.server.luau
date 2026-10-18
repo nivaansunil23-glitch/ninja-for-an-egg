@@ -1,56 +1,35 @@
 --[[
   Forest Island guardian: the blocky chicken (the user's ChickenScript).
-  Builds the chicken from smooth Parts and animates it:
-    • sleeps on its pad (squats, eyes shut, floating Z's)
-    • someone takes an egg from its island → wakes up angry and chases them
-      while they carry the egg and stay near its pad
-    • if it catches them it flings them off the island, up and out then
-      falling, so they have to save themselves on the clouds (the egg cracks
-      from the fall like any other drop)
-    • then walks back to its pad and falls asleep again
-  It stands at the part named "ChickenSpawn" (in Map.Islands.Island1.Guardian);
-  that part's GuardsIsland attribute says whose eggs it guards. DAMAGE is 0.
+  Builds the chicken from smooth Parts and animates it; GuardianBrain decides
+  what it does:
+    • sleeps on its pad
+    • someone takes an egg from its island → wakes up and chases them while
+      they carry the egg and stay near its pad
+    • catches them → takes the egg, ragdolls and flings them off the island
+      so they fall and can save themselves on the clouds
+    • carries the egg back to its island's egg spots, then goes back to its
+      pad and falls asleep again
+  Its pad is the part named "ChickenSpawn" (in its island's Guardian folder).
 ]]
 
 local CFG = {
 	SCALE = 4,          -- studs per model unit (4 ≈ 3.5-stud-tall chicken)
-	GUARDS = "Forest",  -- island id whose eggs it guards (ChickenSpawn's GuardsIsland wins)
-	THIEF_DIST = 20,    -- how close to the egg the player who took it must be
+	SLEEP_DIST = 70,
+	CHASE_DIST = 35,
 	STOP_DIST = 5,
 	SPEED = 16,         -- studs/sec (player walk speed is 16)
-	HOME_SPEED = 8,     -- waddling back to its pad
 	LEASH = 90,         -- gives up when the thief is this far from its pad
-	DAMAGE = 0,         -- set >0 to make pecks hurt
+	DAMAGE = 0,         -- never hurts, it flings you instead
 	PECK_COOLDOWN = 1,
-	CATCH_DIST = 4.5,   -- this close to the thief = caught
-	FLING_OUT = 85,     -- sideways speed away from the island's middle
-	FLING_UP = 45,      -- small hop up before they fall
-	FLING_TIME = 0.35,  -- seconds the fling push lasts
-	STUN_TIME = 1.2,    -- seconds they tumble (PlatformStand) after the fling
 }
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local S = CFG.SCALE
 
-local spawnMarker = workspace:FindFirstChild("ChickenSpawn", true)
-while not spawnMarker do
-	task.wait(1)
-	spawnMarker = workspace:FindFirstChild("ChickenSpawn", true)
-end
-local home = spawnMarker.Position
-local guards = spawnMarker:GetAttribute("GuardsIsland") or CFG.GUARDS
-
--- Middle of the guarded island, so a fling always throws you off its edge.
-local islandMiddle = home
-do
-	local island = spawnMarker.Parent
-	while island and island.Parent and island.Parent.Name ~= "Islands" do
-		island = island.Parent
-	end
-	local center = island and island:FindFirstChild("Center")
-	if center and center:IsA("BasePart") then islandMiddle = center.Position end
-end
+local GuardianBrain = require(script.Parent:WaitForChild("GuardianBrain"))
+local brain = GuardianBrain.new("ChickenSpawn", { CATCH_DIST = CFG.STOP_DIST, LEASH = CFG.LEASH, CARRY_HEIGHT = 4.5 })
+local home = brain.home
 
 local model = Instance.new("Model")
 model.Name = "ForestChicken"
@@ -156,78 +135,6 @@ end
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function flat(v) return Vector3.new(v.X, 0, v.Z) end
-
--- The player who took an egg from the guarded island. World eggs live in
--- Workspace.Eggs with an Island attribute; picking one up destroys it and puts
--- CarryingEgg on the player who took it.
-local thief = nil
-local function watchEgg(egg)
-	task.defer(function()
-		if not egg:IsA("BasePart") or egg:GetAttribute("Island") ~= guards then return end
-		egg.Destroying:Connect(function()
-			local at = egg.Position
-			task.defer(function()
-				local best, bestD
-				for _, plr in ipairs(Players:GetPlayers()) do
-					local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-					if hrp and plr:GetAttribute("CarryingEgg") then
-						local d = (hrp.Position - at).Magnitude
-						if d < CFG.THIEF_DIST and (not bestD or d < bestD) then best, bestD = plr, d end
-					end
-				end
-				if best then thief = best end
-			end)
-		end)
-	end)
-end
-task.spawn(function()
-	local eggs = workspace:WaitForChild("Eggs")
-	for _, egg in ipairs(eggs:GetChildren()) do watchEgg(egg) end
-	eggs.ChildAdded:Connect(watchEgg)
-end)
-
-local function thiefTarget()
-	if not thief then return nil end
-	local char = thief.Parent and thief.Character
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum or hum.Health <= 0 or not thief:GetAttribute("CarryingEgg")
-		or flat(hrp.Position - home).Magnitude > CFG.LEASH then
-		thief = nil
-		return nil
-	end
-	return { hrp = hrp, hum = hum }
-end
-
--- Caught! Throw them out past the island's edge. The character is owned by
--- the player's client, so the push is a LinearVelocity on their root part
--- (constraints replicate) and PlatformStand makes them tumble.
-local function fling(target)
-	local hrp, hum = target.hrp, target.hum
-	local out = flat(hrp.Position - islandMiddle)
-	out = out.Magnitude > 0.1 and out.Unit or Vector3.xAxis
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "ChickenFling"
-	attachment.Parent = hrp
-	local push = Instance.new("LinearVelocity")
-	push.Name = "ChickenFling"
-	push.Attachment0 = attachment
-	push.RelativeTo = Enum.ActuatorRelativeTo.World
-	push.MaxForce = math.huge
-	push.VectorVelocity = out * CFG.FLING_OUT + Vector3.new(0, CFG.FLING_UP, 0)
-	push.Parent = hrp
-	hum.PlatformStand = true
-	task.delay(CFG.FLING_TIME, function()
-		push:Destroy()
-		attachment:Destroy()
-	end)
-	task.delay(CFG.STUN_TIME, function()
-		if hum.Parent then hum.PlatformStand = false end
-	end)
-end
-
--- state
 local pos = home
 local heading = 0
 local mode = "sleep"
@@ -238,63 +145,29 @@ RunService.Heartbeat:Connect(function(dt)
 	dt = math.min(dt, 0.05)
 	t += dt
 
-	-- pick behaviour: chase the egg thief, else waddle home, else sleep
-	local target = thiefTarget()
-	local dist = target and flat(target.hrp.Position - pos).Magnitude
-	local toHome = flat(home - pos)
-	if target then
-		mode = "run"
-	elseif toHome.Magnitude > 1.5 then
-		mode = "home"
-	else
-		mode = "sleep"
-	end
-	local animMode = mode == "home" and "run" or mode
+	-- pick behaviour
+	local facing, want
+	mode, facing, want = brain:Think(pos, CFG.SPEED)
+	local animMode = if mode == "home" then "run" else mode
 	for k in pairs(W) do W[k] = lerp(W[k], k == animMode and 1 or 0, 1 - math.exp(-5 * dt)) end
-
-	-- movement
-	local want = 0
-	if mode == "run" then
-		local d = target.hrp.Position - pos
-		heading = angLerp(heading, math.atan2(d.X, d.Z), 1 - math.exp(-8 * dt))
-		want = CFG.SPEED
-		if dist <= CFG.CATCH_DIST then
-			fling(target)
-			thief = nil
-		elseif CFG.DAMAGE > 0 and dist <= CFG.STOP_DIST + 1 and t - lastPeck > CFG.PECK_COOLDOWN then
-			lastPeck = t
-			target.hum:TakeDamage(CFG.DAMAGE)
-		end
-	elseif mode == "home" then
-		heading = angLerp(heading, math.atan2(toHome.X, toHome.Z), 1 - math.exp(-6 * dt))
-		want = CFG.HOME_SPEED
+	if facing then
+		heading = angLerp(heading, math.atan2(facing.X, facing.Z), 1 - math.exp(-(if mode == "run" then 8 else 6) * dt))
 	end
 	speed = lerp(speed, want, 1 - math.exp(-6 * dt))
 	local before = pos
 	pos += Vector3.new(math.sin(heading), 0, math.cos(heading)) * speed * dt
 
-	-- stick to the ground, and never walk off the island's edge
-	local exclude = { model }
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr.Character then table.insert(exclude, plr.Character) end
-	end
-	local eggs = workspace:FindFirstChild("Eggs")
-	if eggs then table.insert(exclude, eggs) end
-	rayParams.FilterDescendantsInstances = exclude
-	local hit = workspace:Raycast(pos + Vector3.new(0, 8, 0), Vector3.new(0, -30, 0), rayParams)
-	if hit then
-		pos = Vector3.new(pos.X, lerp(pos.Y, hit.Position.Y, 1 - math.exp(-20 * dt)), pos.Z)
-	else
-		pos = before
-		speed = 0
-	end
+	-- stick to the ground
+	local stopped
+	pos, stopped = brain:Ground(pos, before, model, dt)
+	if stopped then speed = 0 end
 
 	-- pose (same curves as the web preview)
 	local run, sl, id = W.run, W.sleep, W.idle
 	local stride = math.min(1, speed / CFG.SPEED)
 	phase += dt * (6 + 12 * stride) * (run > 0.3 and 1 or 0.3)
 	local s = math.sin(phase)
-	local angry = (mode == "run" and run or 0) * (1 - stride)
+	local angry = run * (1 - stride)
 	local breath = math.sin(t * 1.6)
 	local drop = -0.185 * sl
 	local bob = math.abs(math.cos(phase)) * 0.05 * run * stride + angry * math.abs(math.sin(t * 14)) * 0.04

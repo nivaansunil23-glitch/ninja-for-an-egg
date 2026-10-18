@@ -248,6 +248,11 @@ local function dropEgg(player)
 	notify(player, "EggDropped", EggFactory.Info(data))
 end
 
+-- Drops the carried egg on the ground under the player (the Drop Egg button).
+function EggCarry.DropCarried(player)
+	dropEgg(player)
+end
+
 function EggCarry.IsCarrying(player)
 	return carried[player] ~= nil
 end

@@ -4,15 +4,22 @@
     • sleeps on its pad
     • someone takes an egg from its island → chases them while they carry it
       and stay within LEASH of the pad
-    • catches them → flings them up and out past the island's edge to fall
-      (the egg cracks from the fall like any other drop)
-    • then walks back to its pad and falls asleep again
+    • catches them → takes the egg off them, ragdolls them and flings them
+      up and out past the island's edge to fall (they can save themselves on
+      the rescue clouds)
+    • carries the egg back to one of its island's EggSpawns, puts it down,
+      then walks back to its pad and falls asleep again
   The pad is a part named <SpawnName> (e.g. "DogSpawn") somewhere in the map,
   normally Map.Islands.IslandN.Guardian. Its GuardsIsland attribute is the
   island id whose eggs it guards (falls back to the island's IslandId).
 ]]
 
 local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local EggsFolder = ServerScriptService:WaitForChild("Server"):WaitForChild("Eggs")
+local EggCarry = require(EggsFolder:WaitForChild("EggCarry"))
+local EggFactory = require(EggsFolder:WaitForChild("EggFactory"))
 
 local GuardianBrain = {}
 GuardianBrain.__index = GuardianBrain
@@ -25,7 +32,9 @@ local DEFAULTS = {
 	FLING_OUT = 85, -- sideways speed away from the island's middle
 	FLING_UP = 45, -- small hop up before they fall
 	FLING_TIME = 0.35, -- seconds the fling push lasts
-	STUN_TIME = 1.2, -- seconds they tumble (PlatformStand) after the fling
+	STUN_TIME = 1.5, -- seconds they're ragdolled after the fling
+	CARRY_HEIGHT = 5, -- studs above the animal's feet where it holds a taken egg
+	CARRY_SPEED = 10, -- walking an egg back
 }
 
 local function flat(v: Vector3): Vector3
@@ -53,8 +62,10 @@ function GuardianBrain.new(spawnName: string, cfg)
 	self.home = marker.Position
 	self.middle = marker.Position
 	self.thief = nil
+	self.carrying = nil -- { Data, Part, To (Vector3 egg spot) }
 
 	local island = islandOf(marker)
+	self.island = island
 	local center = island and island:FindFirstChild("Center")
 	if center and center:IsA("BasePart") then
 		self.middle = center.Position
@@ -125,6 +136,107 @@ function GuardianBrain:_thiefTarget()
 	return { hrp = hrp, hum = hum }
 end
 
+-- Swaps the character's joints for ball sockets for a while so they flop
+-- around. Joint changes replicate, so the owning client simulates the flop.
+local function ragdoll(character: Model, seconds: number)
+	local made = {}
+	for _, motor in character:GetDescendants() do
+		if motor:IsA("Motor6D") and motor.Name ~= "Root" and motor.Part0 and motor.Part1 then
+			local a0 = Instance.new("Attachment")
+			a0.Name = "RagdollA0"
+			a0.CFrame = motor.C0
+			a0.Parent = motor.Part0
+			local a1 = Instance.new("Attachment")
+			a1.Name = "RagdollA1"
+			a1.CFrame = motor.C1
+			a1.Parent = motor.Part1
+			local socket = Instance.new("BallSocketConstraint")
+			socket.Name = "Ragdoll"
+			socket.Attachment0 = a0
+			socket.Attachment1 = a1
+			socket.LimitsEnabled = true
+			socket.TwistLimitsEnabled = true
+			socket.UpperAngle = 60
+			socket.TwistLowerAngle = -45
+			socket.TwistUpperAngle = 45
+			socket.Parent = motor.Part0
+			motor.Enabled = false
+			table.insert(made, { motor, a0, a1, socket })
+		end
+	end
+	task.delay(seconds, function()
+		for _, entry in made do
+			if entry[1].Parent then
+				entry[1].Enabled = true
+			end
+			entry[2]:Destroy()
+			entry[3]:Destroy()
+			entry[4]:Destroy()
+		end
+	end)
+end
+
+-- Where to put a taken egg back: a free EggSpawn on its island (the nearest
+-- one if they're all taken), else its pad.
+function GuardianBrain:_eggSpot(): Vector3
+	local spots = {}
+	if self.island then
+		for _, d in self.island:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "EggSpawn" then
+				table.insert(spots, d)
+			end
+		end
+	end
+	local eggs = workspace:FindFirstChild("Eggs")
+	local best, bestD
+	for _, spot in spots do
+		local free = true
+		if eggs then
+			for _, egg in eggs:GetChildren() do
+				if egg:IsA("BasePart") and flat(egg.Position - spot.Position).Magnitude < 3 then
+					free = false
+					break
+				end
+			end
+		end
+		local d = flat(spot.Position - self.home).Magnitude + (if free then 0 else 1e4)
+		if not bestD or d < bestD then
+			best, bestD = spot, d
+		end
+	end
+	return if best then best.Position - Vector3.new(0, best.Size.Y / 2, 0) else self.home
+end
+
+-- Takes the egg off the thief and holds it.
+function GuardianBrain:_takeEgg(player: Player)
+	local data = EggCarry.TakeCarried(player)
+	if not data then
+		return
+	end
+	local part = EggFactory.Build(data)
+	for _, d in part:GetDescendants() do
+		if d:IsA("ProximityPrompt") or d:IsA("LuaSourceContainer") then
+			d:Destroy()
+		end
+	end
+	part.Name = "GuardianHeldEgg"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Parent = workspace
+	self.carrying = { Data = data, Part = part, To = self:_eggSpot() }
+end
+
+-- Puts the held egg back down on its island for anyone to take again.
+function GuardianBrain:_placeEgg()
+	local held = self.carrying
+	self.carrying = nil
+	held.Part:Destroy()
+	local egg = EggCarry.SpawnWorldEgg(held.Data, CFrame.new(held.To) * CFrame.Angles(0, math.random() * math.pi * 2, 0))
+	egg:SetAttribute("Island", self.guards)
+end
+
 -- Caught! Throw them out past the island's edge. The character is owned by
 -- the player's client, so the push is a LinearVelocity on their root part
 -- (constraints replicate) and PlatformStand makes them tumble.
@@ -144,6 +256,9 @@ function GuardianBrain:_fling(target)
 	push.VectorVelocity = out * cfg.FLING_OUT + Vector3.new(0, cfg.FLING_UP, 0)
 	push.Parent = hrp
 	hum.PlatformStand = true
+	if hrp.Parent then
+		ragdoll(hrp.Parent, cfg.STUN_TIME)
+	end
 	task.delay(cfg.FLING_TIME, function()
 		push:Destroy()
 		attachment:Destroy()
@@ -155,18 +270,29 @@ function GuardianBrain:_fling(target)
 	end)
 end
 
--- Call every frame. Returns mode ("run" chasing, "home" walking back, "sleep"),
+-- Call every frame. Returns mode ("run" chasing, "home" walking back or
+-- carrying a taken egg back, "sleep"),
 -- the direction to face (Vector3 or nil) and the speed it wants.
 function GuardianBrain:Think(pos: Vector3, runSpeed: number)
 	local target = self:_thiefTarget()
 	if target then
 		local d = flat(target.hrp.Position - pos)
 		if d.Magnitude <= self.cfg.CATCH_DIST then
+			self:_takeEgg(self.thief)
 			self:_fling(target)
 			self.thief = nil
 		else
 			return "run", d, runSpeed
 		end
+	end
+	local held = self.carrying
+	if held then
+		held.Part.CFrame = CFrame.new(pos + Vector3.new(0, self.cfg.CARRY_HEIGHT + held.Part.Size.Y / 2, 0))
+		local toSpot = flat(held.To - pos)
+		if toSpot.Magnitude > 2 then
+			return "home", toSpot, self.cfg.CARRY_SPEED
+		end
+		self:_placeEgg()
 	end
 	local toHome = flat(self.home - pos)
 	if toHome.Magnitude > 1.5 then

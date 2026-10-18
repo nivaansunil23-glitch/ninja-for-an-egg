@@ -2,12 +2,13 @@
   Cherry Blossom Island guardian: the blocky frog (the user's FrogScript).
   Builds the frog from smooth Parts and animates it; GuardianBrain decides
   what it does:
-    • sleeps on its pad (flattens, eyes shut, slow breathing, floating Z's)
-    • someone takes an egg from its island → wakes up and hops after them, croaking while
+    • sleeps on its pad
+    • someone takes an egg from its island → wakes up and chases them while
       they carry the egg and stay near its pad
-    • catches them → flings them off the island to fall and save themselves
-      on the clouds
-    • then walks back to its pad and falls asleep again
+    • catches them → takes the egg, ragdolls and flings them off the island
+      so they fall and can save themselves on the clouds
+    • carries the egg back to its island's egg spots, then goes back to its
+      pad and falls asleep again
   Its pad is the part named "FrogSpawn" (in its island's Guardian folder).
 ]]
 
@@ -28,7 +29,7 @@ local RunService = game:GetService("RunService")
 local S = CFG.SCALE
 
 local GuardianBrain = require(script.Parent:WaitForChild("GuardianBrain"))
-local brain = GuardianBrain.new("FrogSpawn", { CATCH_DIST = CFG.STOP_DIST, LEASH = CFG.LEASH })
+local brain = GuardianBrain.new("FrogSpawn", { CATCH_DIST = CFG.STOP_DIST, LEASH = CFG.LEASH, CARRY_HEIGHT = 4.5 })
 local home = brain.home
 
 local model = Instance.new("Model")
