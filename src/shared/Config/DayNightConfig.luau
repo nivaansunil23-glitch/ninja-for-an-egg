@@ -4,7 +4,9 @@
 --   DayNightEndsAt   Workspace:GetServerTimeNow() when the phase switches
 --
 -- At night: every island's world eggs are cleared (fresh ones come back at
--- day), and nobody can jump (jump, trampoline bounces, launch pad, jetpack).
+-- day), and nobody can go up to the islands: no launch pad, no jetpack lift,
+-- and anyone on a cloud or sky island (or above NightMaxHeight when night
+-- starts) is sent back to their plot. Jumping and trampoline training still work.
 
 local Workspace = game:GetService("Workspace")
 
@@ -13,6 +15,10 @@ local DayNightConfig = {}
 -- Placeholder lengths, in seconds. Change to taste.
 DayNightConfig.DaySeconds = 8 * 60
 DayNightConfig.NightSeconds = 2 * 60
+
+-- Studs above the base (GroundY) you can't be above when night starts. Under
+-- the first island (150), over the base mountains (under 140).
+DayNightConfig.NightMaxHeight = 145
 
 -- How long the sky takes to fade between day and night.
 DayNightConfig.FadeSeconds = 8

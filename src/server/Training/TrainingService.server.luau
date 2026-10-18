@@ -10,10 +10,8 @@
 --
 -- Player attributes: JumpLevel, JumpXP, TrampolineTier (saved, mirrored by
 -- PlayerData), Training (true while bouncing), JumpBoost (false when off).
--- No bouncing or XP at night (DayNightConfig): sessions stop when night starts.
 
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -22,7 +20,6 @@ local Net = require(Shared:WaitForChild("Net"))
 local Format = require(Shared:WaitForChild("Format"))
 local Trampolines = require(Shared:WaitForChild("Trampolines"))
 local JumpBalance = require(Shared:WaitForChild("Config"):WaitForChild("JumpBalance"))
-local DayNightConfig = require(Shared:WaitForChild("Config"):WaitForChild("DayNightConfig"))
 local PlayerFolder = script.Parent.Parent:WaitForChild("Player")
 local PlayerData = require(PlayerFolder:WaitForChild("PlayerData"))
 local JumpPower = require(PlayerFolder:WaitForChild("JumpPower"))
@@ -90,9 +87,6 @@ local function stop(player: Player, tellClient: boolean)
 end
 
 local function begin(player: Player, trampoline: Instance)
-	if DayNightConfig.IsNight() then
-		return nil -- no jumping at night
-	end
 	if not Trampolines.CanUse(trampoline, player.UserId) then
 		return nil -- only your own pen's trampoline trains you
 	end
@@ -158,9 +152,6 @@ local function xpPerHit(player: Player): number
 end
 
 local function addXp(player: Player, amount: number, kind: string)
-	if DayNightConfig.IsNight() then
-		return
-	end
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -364,15 +355,6 @@ task.spawn(function()
 			then
 				stop(player, true)
 			end
-		end
-	end
-end)
-
--- Night: everyone gets off their trampoline.
-Workspace:GetAttributeChangedSignal("IsNight"):Connect(function()
-	if DayNightConfig.IsNight() then
-		for player in sessions do
-			stop(player, true)
 		end
 	end
 end)

@@ -2,8 +2,6 @@
 -- level, JumpBalance), times their vertex, times held gear like the Jump Coil.
 -- With Jump Boost switched off it's the plain starting jump. Anything that
 -- changes one of those calls JumpPower.Refresh(player).
--- At night (DayNightConfig) the character gets 0 jump; the JumpPower
--- attribute still shows the real power.
 --
 -- Player attributes it keeps up to date:
 --   JumpPower     the jump the character really has
@@ -16,7 +14,6 @@ local Config = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config")
 local GearConfig = require(Config:WaitForChild("GearConfig"))
 local VertexConfig = require(Config:WaitForChild("VertexConfig"))
 local JumpBalance = require(Config:WaitForChild("JumpBalance"))
-local DayNightConfig = require(Config:WaitForChild("DayNightConfig"))
 local PlayerData = require(script.Parent:WaitForChild("PlayerData"))
 
 local JumpPower = {}
@@ -60,7 +57,7 @@ function JumpPower.Refresh(player: Player)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.UseJumpPower = true
-		humanoid.JumpPower = if DayNightConfig.IsNight() then 0 else power
+		humanoid.JumpPower = power
 	end
 end
 

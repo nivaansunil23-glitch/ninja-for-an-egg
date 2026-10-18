@@ -607,14 +607,6 @@ RunService.Heartbeat:Connect(function()
 	local now = os.clock()
 	local grounded = humanoid.FloorMaterial ~= Enum.Material.Air
 
-	-- No bouncing or launching at night (the server checks this too).
-	if DayNightConfig.IsNight() then
-		if session then
-			stopTraining(true, false)
-		end
-		return
-	end
-
 	if session then
 		local info = session.Trampoline.Parent and Trampolines.GetPadInfo(session.Trampoline)
 		if not info or not Trampolines.IsOver(info, root.Position, 4, JumpBalance.BounceHeight + 8) then
@@ -643,7 +635,8 @@ RunService.Heartbeat:Connect(function()
 		return
 	end
 
-	if grounded and now - lastLaunch > LAUNCH_COOLDOWN then
+	-- No launching up at night (DayNightConfig); training still works.
+	if grounded and now - lastLaunch > LAUNCH_COOLDOWN and not DayNightConfig.IsNight() then
 		if Trampolines.FindAt(root.Position, Trampolines.Launch, 0, STAND_ABOVE_PAD) then
 			lastLaunch = now
 			launch(humanoid, root)

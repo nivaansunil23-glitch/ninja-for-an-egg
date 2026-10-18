@@ -754,6 +754,16 @@ local function releasePlot(player)
 end
 
 -- The plot a player owns, or nil.
+-- Sends the player to their plot's entrance. Returns false if they have no plot.
+function PenService.SendHome(player)
+	local plot = playerPlot[player]
+	if not plot then
+		return false
+	end
+	sendToPlot(player, plot)
+	return true
+end
+
 function PenService.GetPlot(player)
 	local plot = playerPlot[player]
 	return plot and plot.Model
