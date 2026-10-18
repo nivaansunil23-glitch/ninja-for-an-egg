@@ -466,11 +466,13 @@ local function refreshSkins()
 end
 
 -- The upgrade prompt would pop up the whole time you bounce, so hide it then.
+-- Other players' trampolines never show it: you can only upgrade your own.
 local function setUpgradePrompts(enabled: boolean)
 	for _, trampoline in Trampolines.GetAll(Trampolines.Training) do
+		local mine = Trampolines.CanUse(trampoline, player.UserId)
 		for _, prompt in trampoline:GetDescendants() do
 			if prompt:IsA("ProximityPrompt") and prompt.Name == UPGRADE_PROMPT then
-				prompt.Enabled = enabled
+				prompt.Enabled = enabled and mine
 			end
 		end
 	end
@@ -732,6 +734,7 @@ task.spawn(function()
 	while true do
 		refreshSigns()
 		refreshSkins()
+		setUpgradePrompts(session == nil) -- plots change owners
 		task.wait(REFRESH_SECONDS)
 	end
 end)

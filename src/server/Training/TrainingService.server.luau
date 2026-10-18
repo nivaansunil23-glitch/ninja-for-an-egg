@@ -249,9 +249,28 @@ local function islandName(number: number): string
 	return "island " .. number
 end
 
+-- Buying only works standing by a trampoline you own (your pen's).
+local BUY_DISTANCE = 30
+local function nearOwnTrampoline(player: Player): boolean
+	local root = getRoot(player)
+	if not root then
+		return false
+	end
+	for _, trampoline in Trampolines.GetAll(Trampolines.Training) do
+		local info = Trampolines.CanUse(trampoline, player.UserId) and Trampolines.GetPadInfo(trampoline)
+		if info and (info.Center - root.Position).Magnitude <= BUY_DISTANCE + info.Radius then
+			return true
+		end
+	end
+	return false
+end
+
 buyRemote.OnServerInvoke = function(player, tier)
 	if type(tier) ~= "number" then
 		return false, "Invalid trampoline"
+	end
+	if not nearOwnTrampoline(player) then
+		return false, "Go to your own trampoline to upgrade it"
 	end
 	local data = PlayerData.Get(player)
 	if not data then
@@ -305,6 +324,9 @@ local function addPrompt(trampoline: Instance)
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = part
 	prompt.Triggered:Connect(function(player)
+		if not Trampolines.CanUse(trampoline, player.UserId) then
+			return -- only the plot owner can upgrade their trampoline
+		end
 		openShopRemote:FireClient(player)
 	end)
 end
