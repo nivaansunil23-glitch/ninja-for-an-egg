@@ -59,6 +59,7 @@ EggConfig.Settings = {
 	MaxPenEggs = 6, -- eggs growing in one pen at once (placed anywhere on the floor)
 	PenEdgeMargin = 3, -- studs eggs must stay inside the fence
 	PenEggSpacing = 4, -- studs between two eggs in a pen
+	PenEggGrowTo = 1.7, -- a pen egg grows from 1x to this size as it gets ready to hatch
 }
 
 -- Pen upgrade levels. CashMultiplier multiplies all money you earn (pet
@@ -419,6 +420,28 @@ for eggId, egg in EggConfig.Eggs do
 		EggConfig.EggsByIsland[egg.Island] = list
 	end
 	table.insert(list, eggId)
+end
+
+-- How tall (studs) pets stand in the pen, by island number: higher islands =
+-- way bigger pets. Each animal's SizeMul changes it a bit (square root, so a
+-- 1.6 polar bear is 1.26x and a 0.6 butterfly 0.77x).
+EggConfig.PenPetHeights = { 3, 3.8, 4.8, 6, 7.5, 9.5, 12, 15 }
+
+local islandOfAnimal = {}
+for _, island in EggConfig.Islands do
+	for _, animal in island.Animals do
+		islandOfAnimal[animal.Name] = { Number = island.Number, SizeMul = animal.SizeMul or 1 }
+	end
+end
+
+-- Pen height for an island animal, or nil for old (Legacy) pets.
+function EggConfig.PenPetHeight(petName: string): number?
+	local found = islandOfAnimal[petName]
+	if not found then
+		return nil
+	end
+	local base = EggConfig.PenPetHeights[found.Number] or EggConfig.PenPetHeights[#EggConfig.PenPetHeights]
+	return base * math.sqrt(found.SizeMul)
 end
 
 function EggConfig.GetEgg(eggId)

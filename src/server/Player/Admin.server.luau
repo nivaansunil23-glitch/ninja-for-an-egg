@@ -10,6 +10,7 @@
 --   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 --   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
+--   "GrowEggs"   every egg in your pen jumps halfway to ready (they grow bigger)
 --   "CrackEgg"   cracks the egg you're carrying (knocks you down, egg falls out)
 --   "EggLineup"  every island egg in rows in front of you (one row per island) for LINEUP_SECONDS
 --   "AllGear" / "NoGear"   own every shoe and coil tier / none (amount = tier to keep, 0 = none)
@@ -216,6 +217,9 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 	elseif action == "NoGear" then
 		GearShop.SetAll(player, false)
 		return true, "Shoes and coils removed"
+	elseif action == "GrowEggs" then
+		local n = PenService.GrowHalf(player)
+		return n > 0, if n > 0 then n .. " eggs halfway closer to hatching" else "No eggs in your pen"
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"

@@ -145,6 +145,33 @@ function EggFactory.PopText(position, text, color)
 	end)
 end
 
+-- Makes a built egg `scale` times its normal size (SizeFor), decorations and
+-- label included. Returns how much taller it got (studs). Pen eggs use it to
+-- grow as they get ready to hatch.
+function EggFactory.Resize(part, data, scale)
+	local size = EggFactory.SizeFor(data) * scale
+	local factor = size.X / part.Size.X
+	if math.abs(factor - 1) < 1e-3 then
+		return 0
+	end
+	local grew = size.Y - part.Size.Y
+	part.Size = size
+	for _, child in part:GetChildren() do
+		if child:IsA("BasePart") then
+			child.Size *= factor
+			local weld = child:FindFirstChildOfClass("Weld")
+			if weld then
+				weld.C0 = CFrame.new(weld.C0.Position * factor) * weld.C0.Rotation
+			end
+		elseif child:IsA("BillboardGui") then
+			child.StudsOffset += Vector3.new(0, grew / 2, 0)
+		elseif child:IsA("PointLight") and child.Name == "EggGlow" then
+			child.Range *= factor
+		end
+	end
+	return grew
+end
+
 -- The egg's shell colour: its design's shell, or its EggConfig colour.
 function EggFactory.ShellColor(eggId)
 	local egg = EggConfig.Eggs[eggId]

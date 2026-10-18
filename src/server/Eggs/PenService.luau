@@ -240,11 +240,31 @@ end
 
 -- Eggs in the pen ----------------------------------------------------------
 
+-- Pen eggs grow as they get ready: 1x when placed, Settings.PenEggGrowTo when
+-- ready to hatch (in 2% steps, so it isn't resized every second for nothing).
+local function growEgg(slot, left)
+	local part, egg = slot.Visual, slot.Egg
+	local def = EggConfig.Eggs[egg.EggId]
+	if not part or not def then
+		return
+	end
+	local total = math.max(1, (def.GrowSeconds or 1) + (def.GrowSecondsPerKg or 0) * egg.Kg)
+	local progress = math.clamp(1 - left / total, 0, 1)
+	local scale = 1 + (S.PenEggGrowTo - 1) * math.floor(progress * 50 + 0.5) / 50
+	if part:GetAttribute("GrowScale") == scale then
+		return
+	end
+	part:SetAttribute("GrowScale", scale)
+	local grew = EggFactory.Resize(part, egg, scale)
+	part.CFrame += part.CFrame.UpVector * (grew / 2) -- keep it sitting on the floor
+end
+
 local function refreshSlot(slot)
 	if not slot.Prompt then
 		return
 	end
 	local left = slot.Egg.ReadyAt - os.time()
+	growEgg(slot, left)
 	if slot.Timer then
 		slot.Timer.Text = left > 0 and ("Egg " .. formatTime(left)) or "Ready to hatch!"
 	end
@@ -407,6 +427,26 @@ function PenService.PlaceHere(player)
 	info.ReadyAt = egg.ReadyAt
 	notify(player, "EggPlaced", info)
 	return true
+end
+
+-- Admin: every egg in the player's pen gets halfway to ready (and grows).
+function PenService.GrowHalf(player)
+	local plot = playerPlot[player]
+	if not plot then
+		return 0
+	end
+	local now, n = os.time(), 0
+	for _, slot in plot.Eggs do
+		local left = math.max(0, slot.Egg.ReadyAt - now)
+		slot.Egg.ReadyAt = now + math.floor(left / 2)
+		if slot.Visual then
+			slot.Visual:SetAttribute("ReadyAt", slot.Egg.ReadyAt)
+		end
+		refreshSlot(slot)
+		n += 1
+	end
+	EggSave.MarkDirty(player)
+	return n
 end
 
 -- Admin: every egg in the player's pen is ready to hatch now.

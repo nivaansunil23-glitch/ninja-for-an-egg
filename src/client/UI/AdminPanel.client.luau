@@ -258,7 +258,7 @@ buttonRow(dayNightCard, rowY(1), {
 -- play its hatch animation right away (only on your screen, nothing saved),
 -- make every egg in your pen ready to hatch, or crack the egg you're carrying.
 local eggY = dayNightY + dayNightHeight + GAP
-local eggCard, eggHeight = card("EggCard", "Eggs", eggY, 2)
+local eggCard, eggHeight = card("EggCard", "Eggs", eggY, 3)
 local eggIndex = 1
 local eggName = Components.Label({
 	Name = "EggName",
@@ -333,6 +333,54 @@ buttonRow(eggCard, rowY(2), {
 	{ "Ready Eggs", Theme.Colors.Orange, function() run("ReadyEggs", 0) end },
 	{ "Crack Egg", Theme.Colors.Red, function() run("CrackEgg", 0) end },
 	{ "Egg Lineup", Theme.Colors.Sky, function() run("EggLineup", 0) end },
+})
+buttonRow(eggCard, rowY(3), {
+	{ "Grow Half", Theme.Colors.Mint, function() run("GrowEggs", 0) end },
+	{ "Pet Sizes", Theme.Colors.Purple, function()
+		-- Only on your screen: the first animal of every island at its pen size
+		-- (EggConfig.PenPetHeight), in a row in front of you for a while.
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if not root then
+			return
+		end
+		local Animals = require(ReplicatedStorage.Shared:WaitForChild("Animals"))
+		local old = workspace:FindFirstChild("AdminPetSizes")
+		if old then
+			old:Destroy()
+		end
+		local folder = Instance.new("Folder")
+		folder.Name = "AdminPetSizes"
+		folder.Parent = workspace
+		local flat = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+		local forward = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, -1)
+		local right = forward:Cross(Vector3.yAxis)
+		local heights, total = {}, 0
+		for i, island in EggConfig.Islands do
+			heights[i] = EggConfig.PenPetHeight(island.Animals[1].Name) or 3
+			total += heights[i] + 2
+		end
+		local x = -total / 2
+		local feet = root.Position - Vector3.new(0, 3, 0) + forward * 22
+		local rigs = {}
+		for i, island in EggConfig.Islands do
+			local name = island.Animals[1].Name
+			local spec = Animals.GetSpec(name)
+			x += heights[i] / 2 + 1
+			if spec then
+				local rig = Animals.Build(name, { Parent = folder, Scale = heights[i] / (spec.Scale or 3) })
+				rig:Step(0, "idle", 0, feet + right * x, math.atan2(-forward.X, -forward.Z))
+				table.insert(rigs, rig)
+			end
+			x += heights[i] / 2 + 1
+		end
+		Components.Notify(gui, "Pet sizes: islands 1 to 8, left to right", Theme.Colors.Mint[1])
+		task.delay(20, function()
+			for _, rig in rigs do
+				rig:Destroy()
+			end
+			folder:Destroy()
+		end)
+	end },
 })
 showEgg()
 

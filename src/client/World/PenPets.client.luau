@@ -102,11 +102,13 @@ local function setIncome(pet)
 	pet.MoneyLabel.Text = Format.Money(pet.Info.Income or 0) .. "/s"
 end
 
-local function randomSpot(pen)
+-- Big pets keep further from the fence so they don't poke through it.
+local function randomSpot(pen, height: number?)
 	local half = pen.Floor.Size / 2
+	local edge = math.min(EDGE + (height or 0) * 0.35, half.X - 1, half.Z - 1)
 	return Vector2.new(
-		rng:NextNumber(-half.X + EDGE, half.X - EDGE),
-		rng:NextNumber(-half.Z + EDGE, half.Z - EDGE)
+		rng:NextNumber(-half.X + edge, half.X - edge),
+		rng:NextNumber(-half.Z + edge, half.Z - edge)
 	)
 end
 
@@ -115,7 +117,8 @@ local function worldAt(pen, spot: Vector2): Vector3
 end
 
 local function addPet(pen, info, hatchSpot: Vector2?)
-	local height = math.clamp(2.5 + (info.Weight or 1) * 0.1, 2.5, 6)
+	-- island animals: the higher their island, the bigger (EggConfig.PenPetHeight)
+	local height = EggConfig.PenPetHeight(info.Name) or math.clamp(2.5 + (info.Weight or 1) * 0.1, 2.5, 6)
 	local spec = Animals.GetSpec(info.Name)
 	local rig = if spec
 		then Animals.Build(info.Name, { Parent = folder, Scale = height / (spec.Scale or 3) })
@@ -123,7 +126,8 @@ local function addPet(pen, info, hatchSpot: Vector2?)
 	local pet = {
 		Info = info,
 		Rig = rig,
-		Spot = hatchSpot or randomSpot(pen),
+		Spot = hatchSpot or randomSpot(pen, height),
+		Height = height,
 		Heading = rng:NextNumber(0, math.pi * 2),
 		Speed = 0,
 		Mode = "idle",
@@ -194,7 +198,7 @@ local function watchPlot(plotModel)
 end
 
 local function update(pen, pet, dt)
-	local walkSpeed = WALK_SPEED
+	local walkSpeed = WALK_SPEED * math.sqrt(math.max(pet.Height or 3, 3) / 3) -- big pets take bigger steps
 	local hopY = 0
 	if pet.Hop then
 		-- just hatched: a big hop with a spin where the egg was
@@ -211,7 +215,7 @@ local function update(pen, pet, dt)
 	if pet.Mode == "idle" then
 		pet.Timer -= dt
 		if pet.Timer <= 0 and not pet.Hop then
-			pet.Target = randomSpot(pen)
+			pet.Target = randomSpot(pen, pet.Height)
 			pet.Mode = "walk"
 		end
 	end
