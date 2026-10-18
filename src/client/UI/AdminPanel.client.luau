@@ -32,7 +32,7 @@ local window = Components.Window({
 	Title = "Admin",
 	Icon = "Gear",
 	Parent = gui,
-	Size = UDim2.fromOffset(520, 400),
+	Size = UDim2.fromOffset(540, 440),
 	Colors = Theme.Colors.Purple,
 })
 local content = window.Content
@@ -54,14 +54,33 @@ local function run(action: string, amount: number)
 	end
 end
 
+-- Layout (pixels inside the window's content area, which is 504 x 342).
+local GAP = 12
+local CARD_PAD = 12
+local HEADER_H = 26
+local ROW_H = 50
+
+-- Status pill: current level and jump power.
+local statusPill = Components.Box({
+	Name = "StatusPill",
+	Parent = content,
+	Size = UDim2.new(1, 0, 0, 40),
+	Colors = Theme.Colors.NavyCard,
+	CornerRadius = UDim.new(1, 0),
+	StrokeThickness = 3,
+	ZIndex = 11,
+})
+statusPill:FindFirstChildOfClass("UIStroke").Color = Theme.PanelOutline
 local status = Components.Label({
 	Name = "Status",
 	Text = "",
-	Parent = content,
-	Size = UDim2.new(1, 0, 0, 34),
-	Position = UDim2.fromOffset(0, 14),
+	Parent = statusPill,
+	Size = UDim2.new(1, -32, 1, -10),
+	Position = UDim2.fromScale(0.5, 0.5),
+	AnchorPoint = Vector2.new(0.5, 0.5),
 	StrokeThickness = 2.5,
-	MaxTextSize = 26,
+	MaxTextSize = 24,
+	ZIndex = 12,
 })
 local function updateStatus()
 	status.Text = string.format(
@@ -75,65 +94,100 @@ for _, name in { "JumpLevel", "JumpPower" } do
 end
 updateStatus()
 
-local function sectionTitle(text: string, y: number)
-	Components.Label({
-		Text = text,
+-- A darker card with a small heading in its top-left corner.
+-- rows = how many button rows it holds. Returns the card and the y where its
+-- first row starts.
+local function card(name: string, heading: string, y: number, rows: number)
+	local height = CARD_PAD + HEADER_H + 6 + rows * ROW_H + (rows - 1) * 10 + CARD_PAD
+	local frame = Components.Box({
+		Name = name,
 		Parent = content,
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, height),
 		Position = UDim2.fromOffset(0, y),
-		XAlign = Enum.TextXAlignment.Left,
-		MaxTextSize = 24,
-		StrokeThickness = 2.5,
+		Colors = Theme.Colors.NavyCard,
+		CornerRadius = UDim.new(0, 14),
+		StrokeThickness = 3,
+		ZIndex = 11,
 	})
+	frame:FindFirstChildOfClass("UIStroke").Color = Theme.PanelOutline
+	local title = Components.Label({
+		Name = "Heading",
+		Text = heading,
+		Parent = frame,
+		Size = UDim2.new(1, -2 * CARD_PAD, 0, HEADER_H),
+		Position = UDim2.fromOffset(CARD_PAD, CARD_PAD - 2),
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 2.5,
+		MaxTextSize = 24,
+		ZIndex = 12,
+	})
+	title.Font = Theme.TitleFont
+	return frame, height
+end
+
+local function rowY(index: number): number
+	return CARD_PAD + HEADER_H + 6 + (index - 1) * (ROW_H + 10)
 end
 
 -- A row of equal buttons: { { Text, Colors, OnClick }, ... }
-local function buttonRow(y: number, buttons)
-	local width = 1 / #buttons
+local function buttonRow(parent: GuiObject, y: number, buttons)
+	local count = #buttons
+	local gap = 10
 	for i, info in buttons do
 		Components.Button({
 			Text = info[1],
-			Parent = content,
-			Size = UDim2.new(width, -10, 0, 52),
-			Position = UDim2.new(width * (i - 1), 5, 0, y),
+			Parent = parent,
+			-- Equal widths with a 10px gap between, inside the card padding.
+			Size = UDim2.new(1 / count, -(2 * CARD_PAD + gap * (count - 1)) / count, 0, ROW_H),
+			Position = UDim2.new(
+				(i - 1) / count,
+				CARD_PAD - (i - 1) * (2 * CARD_PAD + gap * (count - 1)) / count + (i - 1) * gap,
+				0,
+				y
+			),
 			Colors = info[2],
-			CornerRadius = UDim.new(0, 16),
+			CornerRadius = UDim.new(0, 14),
 			MaxTextSize = 24,
+			ZIndex = 13,
 			OnClick = info[3],
 		})
 	end
 end
 
-sectionTitle("Jump", 56)
-buttonRow(88, {
+-- Jump card: quick level buttons, then type a level and press Set.
+local jumpY = 40 + GAP
+local jumpCard, jumpHeight = card("JumpCard", "Jump", jumpY, 2)
+buttonRow(jumpCard, rowY(1), {
 	{ "+10 Lv", Theme.Colors.Sky, function() run("AddLevels", 10) end },
 	{ "+100 Lv", Theme.Colors.Sky, function() run("AddLevels", 100) end },
 	{ "Max", Theme.Colors.Purple, function() run("SetLevel", 1e6) end },
 	{ "Reset", Theme.Colors.Red, function() run("SetLevel", 1) end },
 })
 
--- Type a level and press Set.
 local box = Instance.new("TextBox")
 box.Name = "LevelBox"
-box.PlaceholderText = "Level..."
+box.PlaceholderText = "Type a level..."
 box.Text = ""
 box.Font = Theme.Font
-box.TextScaled = true
-box.TextColor3 = Theme.DarkText
-box.PlaceholderColor3 = Color3.fromRGB(160, 140, 190)
+box.TextScaled = false
+box.TextSize = 24
+box.TextXAlignment = Enum.TextXAlignment.Left
+box.TextColor3 = Theme.Text
+box.PlaceholderColor3 = Color3.fromRGB(150, 160, 205)
 box.ClearTextOnFocus = false
-box.Size = UDim2.new(0.66, -10, 0, 50)
-box.Position = UDim2.new(0, 5, 0, 152)
-box.BackgroundColor3 = Color3.new(1, 1, 1)
-Components.Corner(box, UDim.new(0, 16))
-Components.Stroke(box, 3)
+box.BackgroundColor3 = Theme.PanelOutline
+box.BackgroundTransparency = 0.25
+box.Size = UDim2.new(0.62, -CARD_PAD - 5, 0, ROW_H)
+box.Position = UDim2.fromOffset(CARD_PAD, rowY(2))
+box.ZIndex = 13
+Components.Corner(box, UDim.new(0, 14))
+Components.Stroke(box, 3, Theme.PanelOutline)
 local boxPadding = Instance.new("UIPadding")
-boxPadding.PaddingLeft = UDim.new(0, 14)
-boxPadding.PaddingRight = UDim.new(0, 14)
-boxPadding.PaddingTop = UDim.new(0, 8)
-boxPadding.PaddingBottom = UDim.new(0, 8)
+boxPadding.PaddingLeft = UDim.new(0, 16)
+boxPadding.PaddingRight = UDim.new(0, 16)
 boxPadding.Parent = box
-box.Parent = content
+box.Parent = jumpCard
+
 local function setTyped()
 	local level = tonumber(box.Text)
 	if level then
@@ -149,17 +203,19 @@ box.FocusLost:Connect(function(enter)
 end)
 Components.Button({
 	Text = "Set Level",
-	Parent = content,
-	Size = UDim2.new(0.34, -10, 0, 52),
-	Position = UDim2.new(0.66, 5, 0, 151),
+	Parent = jumpCard,
+	Size = UDim2.new(0.38, -CARD_PAD - 5, 0, ROW_H),
+	Position = UDim2.new(0.62, 5, 0, rowY(2)),
 	Colors = Theme.Colors.Mint,
-	CornerRadius = UDim.new(0, 16),
+	CornerRadius = UDim.new(0, 14),
 	MaxTextSize = 24,
+	ZIndex = 13,
 	OnClick = setTyped,
 })
 
-sectionTitle("Money", 220)
-buttonRow(252, {
+-- Money card.
+local moneyCard = card("MoneyCard", "Money", jumpY + jumpHeight + GAP, 1)
+buttonRow(moneyCard, rowY(1), {
 	{ "+1K", Theme.Colors.Yellow, function() run("AddMoney", 1e3) end },
 	{ "+1M", Theme.Colors.Yellow, function() run("AddMoney", 1e6) end },
 	{ "+1B", Theme.Colors.Orange, function() run("AddMoney", 1e9) end },

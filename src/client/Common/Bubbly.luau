@@ -5,6 +5,8 @@
 
 local TweenService = game:GetService("TweenService")
 
+local FitText = require(script.Parent:WaitForChild("FitText"))
+
 local Bubbly = {}
 
 Bubbly.Font = Enum.Font.FredokaOne
@@ -143,6 +145,7 @@ function Bubbly.Label(props)
 	limit.Parent = label
 
 	label.Parent = props.Parent
+	FitText.Attach(label)
 	return label
 end
 

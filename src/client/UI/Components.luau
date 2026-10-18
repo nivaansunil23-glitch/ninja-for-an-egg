@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
+local FitText = require(script.Parent.Parent:WaitForChild("Common"):WaitForChild("FitText"))
 
 local Components = {}
 
@@ -130,6 +131,9 @@ function Components.Label(props)
 	limit.Parent = label
 
 	label.Parent = props.Parent
+	if props.AutoFit ~= false then
+		FitText.Attach(label)
+	end
 	return label
 end
 
@@ -558,6 +562,7 @@ function Components.Notify(gui: ScreenGui, text: string, color: Color3?)
 		Color = color,
 		StrokeThickness = 2.5,
 		ZIndex = 21,
+		AutoFit = false,
 	})
 	label.TextScaled = false
 	label.TextSize = 26
