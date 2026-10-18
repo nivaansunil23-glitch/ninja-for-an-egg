@@ -3,6 +3,7 @@
 --   * right middle: square orange Pets button with a pet-count badge
 --   * bottom left: jump power and money in big outlined numbers with icons
 --   * the height bar along the top (HeightBar) and the jetpack fuel bar
+--   * top middle, under the height bar: Day / Night and a countdown to the next switch
 -- All icons are drawn by Icons (no emoji).
 
 local Players = game:GetService("Players")
@@ -12,6 +13,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))
+local DayNightConfig = require(Shared:WaitForChild("Config"):WaitForChild("DayNightConfig"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
 local Icons = require(script.Parent:WaitForChild("Icons"))
@@ -227,6 +229,88 @@ local function buildFuelBar(parent: Instance)
 	end)
 end
 
+-- Under the height bar: sun or moon, "Day" / "Night" and the time left.
+local DAY_COLORS = { Color3.fromRGB(140, 220, 255), Color3.fromRGB(65, 160, 245) }
+local NIGHT_COLORS = { Color3.fromRGB(110, 100, 200), Color3.fromRGB(55, 45, 130) }
+
+local function buildDayNight(parent: Instance)
+	local panel = Components.Box({
+		Name = "DayNight",
+		Parent = parent,
+		Size = UDim2.fromOffset(200, 64),
+		Position = UDim2.new(0.5, 0, 0.13, 20), -- just under the height bar
+		AnchorPoint = Vector2.new(0.5, 0),
+		Colors = Theme.Colors.Navy,
+		CornerRadius = UDim.new(0, 12),
+		StrokeThickness = 4,
+	})
+	local strip = Components.Box({
+		Name = "Strip",
+		Parent = panel,
+		Size = UDim2.new(0, 64, 1, 0),
+		Colors = DAY_COLORS,
+		CornerRadius = UDim.new(0, 12),
+		StrokeThickness = 0,
+	})
+	local sun = Icons.Make("Sun", strip, {
+		Size = UDim2.fromOffset(52, 52),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ZIndex = 3,
+	})
+	local moon = Icons.Make("Moon", strip, {
+		Size = UDim2.fromOffset(52, 52),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ZIndex = 3,
+	})
+	local title = Components.Label({
+		Name = "Phase",
+		Text = "Day",
+		Parent = panel,
+		Size = UDim2.new(1, -78, 0, 30),
+		Position = UDim2.new(0, 72, 0, 4),
+		XAlign = Enum.TextXAlignment.Left,
+		MaxTextSize = 28,
+		StrokeThickness = 3,
+		ZIndex = 3,
+	})
+	title.Font = Theme.TitleFont
+	local timer = Components.Label({
+		Name = "Timer",
+		Text = "",
+		Parent = panel,
+		Size = UDim2.new(1, -78, 0, 22),
+		Position = UDim2.new(0, 72, 0, 36),
+		XAlign = Enum.TextXAlignment.Left,
+		MaxTextSize = 20,
+		StrokeThickness = 2.5,
+		ZIndex = 3,
+	})
+
+	local function updatePhase()
+		local night = DayNightConfig.IsNight()
+		sun.Visible = not night
+		moon.Visible = night
+		title.Text = if night then "Night" else "Day"
+		Components.SetColors(strip, if night then NIGHT_COLORS else DAY_COLORS)
+		Components.Pop(title, 1.15)
+	end
+	workspace:GetAttributeChangedSignal("IsNight"):Connect(updatePhase)
+	updatePhase()
+
+	local shown = -1
+	RunService.Heartbeat:Connect(function()
+		local left = math.ceil(DayNightConfig.SecondsLeft())
+		if left ~= shown then
+			shown = left
+			local upcoming = if DayNightConfig.IsNight() then "Day" else "Night"
+			timer.Text = string.format("%s in %d:%02d", upcoming, left // 60, left % 60)
+		end
+	end)
+	return panel
+end
+
 -- actions = { Shop = fn, Index = fn, Inventory = fn, IndexReady = fn -> number }
 function Hud.Build(gui: ScreenGui, actions)
 	local scales = {}
@@ -298,6 +382,8 @@ function Hud.Build(gui: ScreenGui, actions)
 	statsLayout.Padding = UDim.new(0, 0)
 	statsLayout.Parent = stats
 	fitted(stats)
+
+	fitted(buildDayNight(gui))
 
 	local _, jumpValue = stat(stats, "Shoe", JUMP_BLUE, 1, 34)
 	local _, moneyValue = stat(stats, "Cash", MONEY_GREEN, 2, 48)

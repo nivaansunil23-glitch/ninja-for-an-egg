@@ -8,11 +8,19 @@
 --     the island. The egg's bottom sits at the bottom of the spot part.
 --     Without spots, eggs land on random ground spots of the island.
 --   * Optional "MaxEggs" attribute on the island overrides the egg limit.
+--
+-- Day/night (DayNightConfig): when night starts, every egg still lying on an
+-- island is cleared and nothing spawns; when day comes back each island gets
+-- a full fresh set. Carried eggs, dropped eggs and pen eggs aren't touched.
+-- Which egg spawns is a weighted pick from the island's pool (SpawnWeight in
+-- EggConfig.Eggs), so rarer eggs just get a lower weight.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
+local DayNightConfig = require(ReplicatedStorage.Shared.Config.DayNightConfig)
 local EggCarry = require(script.Parent.EggCarry)
 local EggFactory = require(script.Parent.EggFactory)
 local EggMap = require(script.Parent.EggMap)
@@ -22,7 +30,7 @@ local rng = Random.new()
 
 local EggSpawner = {}
 
-local running = {} -- [island] = true
+local running = {} -- [island] = { Spawned = { [part] = true }, Fill = fn }
 
 local function pickEgg(pool)
 	local total = 0
@@ -83,13 +91,17 @@ local function runIsland(island)
 		-- Base island and decoration have no eggs.
 		return
 	end
-	running[island] = true
+	local state = { Spawned = {} }
+	running[island] = state
 
 	local spots = getSpawnSpots(island)
 	local used = {} -- [spot] = true
 	local count = 0
 
 	local function spawnOne()
+		if DayNightConfig.IsNight() then
+			return
+		end
 		local maxEggs = island:GetAttribute("MaxEggs") or S.MaxEggsPerIsland
 		if count >= maxEggs then
 			return
@@ -123,17 +135,23 @@ local function runIsland(island)
 		part:SetAttribute("Island", key)
 		used[slot] = true
 		count += 1
+		state.Spawned[part] = true
 		part.Destroying:Connect(function()
 			used[slot] = nil
 			count -= 1
+			state.Spawned[part] = nil
 		end)
 	end
 
-	task.spawn(function()
+	function state.Fill()
 		local maxEggs = island:GetAttribute("MaxEggs") or S.MaxEggsPerIsland
 		for _ = 1, maxEggs do
 			spawnOne()
 		end
+	end
+
+	task.spawn(function()
+		state.Fill()
 		while island.Parent do
 			task.wait(S.IslandRespawnSeconds)
 			spawnOne()
@@ -142,7 +160,36 @@ local function runIsland(island)
 	end)
 end
 
+-- Removes every uncollected egg lying on an island (spawned ones and ones a
+-- guardian put back). Dropped eggs have no Island attribute and stay.
+function EggSpawner.ClearAll()
+	for _, state in running do
+		for part in state.Spawned do
+			part:Destroy()
+		end
+	end
+	for _, part in EggCarry.Folder:GetChildren() do
+		if part:GetAttribute("State") == "World" and part:GetAttribute("Island") ~= nil then
+			part:Destroy()
+		end
+	end
+end
+
+-- Tops every island back up to its egg limit.
+function EggSpawner.FillAll()
+	for _, state in running do
+		state.Fill()
+	end
+end
+
 function EggSpawner.Start()
+	Workspace:GetAttributeChangedSignal("IsNight"):Connect(function()
+		if DayNightConfig.IsNight() then
+			EggSpawner.ClearAll()
+		else
+			EggSpawner.FillAll()
+		end
+	end)
 	task.spawn(function()
 		local islands = EggMap.WaitForFolder("Islands")
 		for _, island in islands:GetChildren() do

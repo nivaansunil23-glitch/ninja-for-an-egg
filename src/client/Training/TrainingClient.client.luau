@@ -25,6 +25,7 @@ local Net = require(Shared:WaitForChild("Net"))
 local Format = require(Shared:WaitForChild("Format"))
 local Trampolines = require(Shared:WaitForChild("Trampolines"))
 local JumpBalance = require(Shared:WaitForChild("Config"):WaitForChild("JumpBalance"))
+local DayNightConfig = require(Shared:WaitForChild("Config"):WaitForChild("DayNightConfig"))
 local Bubbly = require(script.Parent.Parent:WaitForChild("Common"):WaitForChild("Bubbly"))
 
 local player = Players.LocalPlayer
@@ -605,6 +606,14 @@ RunService.Heartbeat:Connect(function()
 	end
 	local now = os.clock()
 	local grounded = humanoid.FloorMaterial ~= Enum.Material.Air
+
+	-- No bouncing or launching at night (the server checks this too).
+	if DayNightConfig.IsNight() then
+		if session then
+			stopTraining(true, false)
+		end
+		return
+	end
 
 	if session then
 		local info = session.Trampoline.Parent and Trampolines.GetPadInfo(session.Trampoline)

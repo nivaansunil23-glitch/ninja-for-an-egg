@@ -6,7 +6,7 @@
 --   Icons.Make("Paw", parent, { Size = ..., Silhouette = true })      -- dark locked look
 --
 -- Names: Cash, Coin, Shoe, Cart, Book, Paw, Trophy, Egg, Bag, Gear, Lock,
--- Star, Rocket, Check. Sizes are in pixels so the outlines can match the icon size.
+-- Star, Rocket, Check, Sun, Moon. Sizes are in pixels so the outlines can match the icon size.
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 
@@ -221,6 +221,23 @@ function DRAW.Check(p)
 	local green = rgb(90, 220, 110)
 	p.Shape(0.34, 0.6, 0.16, 0.42, green, 0.5, { Rotation = -45 })
 	p.Shape(0.6, 0.48, 0.16, 0.74, green, 0.5, { Rotation = 38 })
+end
+
+function DRAW.Sun(p)
+	local ray = rgb(255, 170, 40)
+	for i = 0, 3 do
+		p.Shape(0.5, 0.5, 0.16, 0.94, ray, 0.5, { Rotation = i * 45 })
+	end
+	p.Shape(0.5, 0.5, 0.62, 0.62, rgb(255, 215, 60), 0.5, { Layer = 1, Shade = true })
+	p.Gloss(0.4, 0.38, 0.18, 0.12, 3)
+end
+
+function DRAW.Moon(p)
+	p.Shape(0.48, 0.52, 0.7, 0.7, rgb(235, 235, 200), 0.5, { Shade = true })
+	p.Shape(0.36, 0.44, 0.16, 0.16, rgb(200, 200, 170), 0.5, { Layer = 1, StrokeScale = 0.6 })
+	p.Shape(0.6, 0.66, 0.2, 0.2, rgb(200, 200, 170), 0.5, { Layer = 1, StrokeScale = 0.6 })
+	p.Shape(0.58, 0.36, 0.1, 0.1, rgb(200, 200, 170), 0.5, { Layer = 1, StrokeScale = 0.6 })
+	p.Shape(0.86, 0.16, 0.16, 0.16, rgb(255, 230, 110), 0.18, { Rotation = 45, Layer = 2 }) -- little star
 end
 
 function Icons.Make(name: string, parent: Instance, props)

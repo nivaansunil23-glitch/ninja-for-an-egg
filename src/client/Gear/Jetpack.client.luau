@@ -1,13 +1,16 @@
 -- Jetpack: while it's held, keep holding jump in the air to fly upward until
 -- the fuel runs out. Fuel refills on the ground. Runs on the client because
 -- the player's own character physics are client-owned.
+-- No lift at night (DayNightConfig); the server also puts the jetpack away.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
-local GearConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("GearConfig"))
+local Config = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config")
+local GearConfig = require(Config:WaitForChild("GearConfig"))
+local DayNightConfig = require(Config:WaitForChild("DayNightConfig"))
 
 local JETPACK = GearConfig.Items.Jetpack
 local HOLD_WINDOW = 0.15 -- JumpRequest repeats while jump is held
@@ -65,7 +68,7 @@ RunService.Heartbeat:Connect(function(dt)
 
 	local grounded = humanoid.FloorMaterial ~= Enum.Material.Air
 	local holding = os.clock() - lastJumpRequest < HOLD_WINDOW or UserInputService:IsKeyDown(Enum.KeyCode.Space)
-	local thrusting = holding and not grounded and fuel > 0
+	local thrusting = holding and not grounded and fuel > 0 and not DayNightConfig.IsNight()
 
 	if thrusting then
 		fuel = math.max(0, fuel - dt)
