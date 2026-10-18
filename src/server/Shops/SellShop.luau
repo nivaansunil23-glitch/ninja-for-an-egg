@@ -35,6 +35,7 @@ function SellShop.Sell(player: Player, petIds): (boolean, string, number)
 	end
 
 	data.Stats.PetsSold += count
+	total = math.floor(total * (player:GetAttribute("CashMultiplier") or 1)) -- pen upgrades
 	PlayerData.AddMoney(player, total)
 	PlayerData.MarkDirty(player)
 	return true, `Sold {count} pet{if count == 1 then "" else "s"} for ${total}!`, total

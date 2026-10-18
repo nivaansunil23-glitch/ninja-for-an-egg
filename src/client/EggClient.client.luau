@@ -61,7 +61,7 @@ local MESSAGES = {
 	end,
 	-- "Hatched" plays the hatch animation (UI/HatchReveal) instead of a toast.
 	PenUpgraded = function(i)
-		return "Pen upgraded!", string.format("Level %d · %d nests", i.Level, i.Nests)
+		return "Pen upgraded!", string.format("Level %d · x%s cash", i.Level, tostring(i.Multiplier))
 	end,
 	Info = function(i)
 		return "Eggs", i.Text

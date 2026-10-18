@@ -349,9 +349,16 @@ local function refreshSigns()
 				sign.Sub.Text = `Jump {JumpBalance.LaunchHeightMultiplier}x higher!`
 			else
 				local own = JumpBalance.Tier(tierFor(trampoline))
+				local owner = Trampolines.OwnerUserId(trampoline)
 				sign.Gui.Enabled = pad ~= nil and session == nil
-				sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
-				sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
+				if Trampolines.CanUse(trampoline, player.UserId) then
+					sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
+					sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
+				else
+					local ownerPlayer = owner and owner > 0 and Players:GetPlayerByUserId(owner)
+					sign.Title.Text = if ownerPlayer then `{ownerPlayer.DisplayName}'s Trampoline` else "Empty Plot"
+					sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
+				end
 			end
 		end
 	end
@@ -469,6 +476,57 @@ local function setUpgradePrompts(enabled: boolean)
 	end
 end
 
+-- Tricks: a flip or spin in the air on every bounce. Turns the root joint
+-- (LowerTorso.Root on R15, RootJoint on R6), so physics isn't touched.
+local TRICK_AXES = { Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1) }
+local trick = nil -- { Joint, Base, Token }
+
+local function rootJoint(character: Model): Motor6D?
+	local lower = character:FindFirstChild("LowerTorso")
+	local joint = lower and lower:FindFirstChild("Root")
+	if not joint then
+		local root = character:FindFirstChild("HumanoidRootPart")
+		joint = root and root:FindFirstChild("RootJoint")
+	end
+	return if joint and joint:IsA("Motor6D") then joint else nil
+end
+
+local function endTrick()
+	if trick then
+		if trick.Joint.Parent then
+			trick.Joint.C0 = trick.Base
+		end
+		trick = nil
+	end
+end
+
+local function playTrick(character: Model, duration: number)
+	local joint = rootJoint(character)
+	if not joint then
+		return
+	end
+	endTrick()
+	local base = joint.C0
+	local axis = TRICK_AXES[math.random(#TRICK_AXES)]
+	local token = {}
+	trick = { Joint = joint, Base = base, Token = token }
+	local start = os.clock()
+	task.spawn(function()
+		while trick and trick.Token == token and joint.Parent do
+			local t = math.clamp((os.clock() - start) / duration, 0, 1)
+			local eased = TweenService:GetValue(t, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+			joint.C0 = base * CFrame.fromAxisAngle(axis, eased * 2 * math.pi)
+			if t >= 1 then
+				break
+			end
+			RunService.RenderStepped:Wait()
+		end
+		if trick and trick.Token == token then
+			endTrick()
+		end
+	end)
+end
+
 -- Training --------------------------------------------------------------------
 
 local function startTraining(trampoline: Instance, info, humanoid: Humanoid, root: BasePart)
@@ -496,6 +554,7 @@ local function stopTraining(tellServer: boolean, hopOff: boolean)
 	local trampoline = session.Trampoline
 	session = nil
 	mustLeave = true
+	endTrick()
 	stopButton.Visible = false
 	hint.Visible = false
 	showBar()
@@ -565,6 +624,8 @@ RunService.Heartbeat:Connect(function()
 			session.LastBounce = now
 			root.AssemblyLinearVelocity = Vector3.new(pull.X, bounceSpeed(), pull.Z)
 			bounceRemote:FireServer()
+			-- Flip through most of the time in the air.
+			playTrick(character, math.clamp(2 * bounceSpeed() / Workspace.Gravity * 0.8, 0.35, 1.2))
 		else
 			root.AssemblyLinearVelocity = Vector3.new(pull.X, velocity.Y, pull.Z)
 		end
@@ -579,9 +640,9 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	-- Land on a training trampoline to start bouncing.
+	-- Land on your own training trampoline to start bouncing.
 	local trampoline, info = Trampolines.FindAt(root.Position, Trampolines.Training, 0, STAND_ABOVE_PAD)
-	if not trampoline then
+	if not trampoline or not Trampolines.CanUse(trampoline, player.UserId) then
 		mustLeave = false
 		return
 	end

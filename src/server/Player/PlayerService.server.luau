@@ -118,6 +118,7 @@ task.spawn(function()
 					end
 				end
 				player:SetAttribute("Income", income)
+				income *= player:GetAttribute("CashMultiplier") or 1 -- pen upgrades
 				if income > 0 then
 					PlayerData.AddMoney(player, income)
 				end

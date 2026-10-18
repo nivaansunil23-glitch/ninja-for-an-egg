@@ -87,6 +87,9 @@ local function stop(player: Player, tellClient: boolean)
 end
 
 local function begin(player: Player, trampoline: Instance)
+	if not Trampolines.CanUse(trampoline, player.UserId) then
+		return nil -- only your own pen's trampoline trains you
+	end
 	local root = getRoot(player)
 	if not root or not isOnPad(trampoline, root) then
 		return nil

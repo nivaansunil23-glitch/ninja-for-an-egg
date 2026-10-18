@@ -4,7 +4,7 @@
 --
 -- EggNotify (server -> client): (kind, info)
 --   kind is one of "PickedUp", "Stolen", "StoleEgg", "EggCracked", "EggBroke",
---   "EggDropped", "EggPlaced", "Hatched", "PenUpgraded" ({ Level, Nests }), "Info".
+--   "EggDropped", "EggPlaced", "Hatched", "PenUpgraded" ({ Level, Multiplier }), "Info".
 --   info has Name, EggId, Kg, Cracks, MaxCracks for egg events, Pet for "Hatched",
 --   Other (player name) for steals, and Text for "Info".
 

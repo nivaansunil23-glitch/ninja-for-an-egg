@@ -58,12 +58,18 @@ EggConfig.Settings = {
 	PetShowSeconds = 6, -- how long the hatched pet stands in the pen
 }
 
--- Pen upgrade levels. Nests = how many slots are unlocked at that level (in
--- NestIndex order). Price = money to reach that level. Prices are placeholders.
--- Pens have 12 slots: 1-6 have nests from the start, 7-12 are NestSpots that
--- get a nest when bought. A level is only for sale if the pen has enough slots.
+-- Pen upgrade levels. CashMultiplier multiplies all money you earn (pet
+-- income and selling). Price = money to reach that level (placeholders).
+-- Every pen has the same 6 nests at every level.
 EggConfig.PenLevels = {
-	{ Nests = 6, Price = 0 },
+	{ CashMultiplier = 1, Price = 0 },
+	{ CashMultiplier = 1.25, Price = 5000 },
+	{ CashMultiplier = 1.5, Price = 25000 },
+	{ CashMultiplier = 2, Price = 100000 },
+	{ CashMultiplier = 2.5, Price = 500000 },
+	{ CashMultiplier = 3, Price = 2000000 },
+	{ CashMultiplier = 4, Price = 10000000 },
+},
 	{ Nests = 7, Price = 5000 },
 	{ Nests = 8, Price = 25000 },
 	{ Nests = 9, Price = 100000 },

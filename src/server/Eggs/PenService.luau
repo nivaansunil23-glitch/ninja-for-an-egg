@@ -15,11 +15,12 @@
 --     ...UpgradeSign (with a "Board" part) gets an "Upgrade Pen" prompt and its
 --                                       SurfaceGui text shows the next level and price
 --
--- Pen upgrades (EggConfig.PenLevels): level 1 unlocks the first nests by
--- NestIndex; each paid level unlocks more. Saved as data.Eggs.PenLevel.
+-- Pen upgrades (EggConfig.PenLevels): each level raises the owner's cash
+-- multiplier (player attribute CashMultiplier). All nests are always open.
+-- Saved as data.Eggs.PenLevel.
 --
 -- Set on the plot: OwnerUserId (0 when free), OwnerName, PenLevel attributes.
--- Set on the Player: PlotName, PenLevel, PenNests attributes.
+-- Set on the Player: PlotName, PenLevel, CashMultiplier attributes.
 -- Players spawn (and respawn) at their plot's PlotSpawn marker.
 -- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
 -- ReadyAt, so they keep growing while the player is offline.
@@ -476,13 +477,18 @@ local function getPenLevel(data)
 	return math.clamp(math.floor(level), 1, #EggConfig.PenLevels)
 end
 
--- The next level this plot can actually use (its pen needs enough Nest/NestSpot parts), or nil.
-local function nextLevel(plot, level)
+-- The next pen level and its info, or nil at max.
+local function nextLevel(_plot, level)
 	local nextInfo = EggConfig.PenLevels[level + 1]
-	if nextInfo and nextInfo.Nests <= #plot.Nests then
+	if nextInfo then
 		return level + 1, nextInfo
 	end
 	return nil
+end
+
+local function formatMultiplier(value)
+	local text = string.format("%.2f", value):gsub("%.?0+$", "")
+	return "x" .. text
 end
 
 local function findUpgradeBoard(plot)
@@ -509,12 +515,12 @@ local function setBoardText(board, text)
 	end
 end
 
--- Locks/unlocks nests and updates the upgrade sign for the plot's current level.
+-- Sets the owner's cash multiplier and updates the upgrade sign for the plot's level.
 local function applyLevel(plot, level)
 	plot.Level = level
-	local unlocked = EggConfig.PenLevels[level].Nests
-	for order, nest in plot.Nests do
-		nest.Unlocked = order <= unlocked
+	local multiplier = EggConfig.PenLevels[level].CashMultiplier
+	for _, nest in plot.Nests do
+		nest.Unlocked = true
 		setShell(plot, nest)
 		setSlotUnlocked(nest, nest.Unlocked)
 		refreshNest(nest)
@@ -527,7 +533,7 @@ local function applyLevel(plot, level)
 	plot.Model:SetAttribute("PenLevel", level)
 	if plot.Owner then
 		plot.Owner:SetAttribute("PenLevel", level)
-		plot.Owner:SetAttribute("PenNests", math.min(unlocked, #plot.Nests))
+		plot.Owner:SetAttribute("CashMultiplier", multiplier)
 	end
 
 	local board = plot.UpgradeBoard
@@ -538,14 +544,15 @@ local function applyLevel(plot, level)
 	local prompt = plot.UpgradePrompt
 	if nextLvl then
 		local price = Format.Money(nextInfo.Price)
-		setBoardText(board, string.format("Upgrade Pen\nLevel %d > Level %d\n%s", level, nextLvl, price))
+		local nextMul = formatMultiplier(nextInfo.CashMultiplier)
+		setBoardText(board, string.format("Upgrade Pen\n%s > %s Cash\n%s", formatMultiplier(multiplier), nextMul, price))
 		if prompt then
 			prompt.ActionText = "Upgrade Pen"
-			prompt.ObjectText = string.format("Lv %d > %d · %d nests · %s", level, nextLvl, nextInfo.Nests, price)
+			prompt.ObjectText = string.format("Lv %d > %d · %s cash · %s", level, nextLvl, nextMul, price)
 			prompt.Enabled = true
 		end
 	else
-		setBoardText(board, string.format("Pen Level %d\nMAX", level))
+		setBoardText(board, string.format("Pen Level %d\n%s Cash\nMAX", level, formatMultiplier(multiplier)))
 		if prompt then
 			prompt.Enabled = false
 		end
@@ -578,7 +585,7 @@ local function buyUpgrade(player, plot)
 	data.Eggs.PenLevel = nextLvl
 	EggSave.MarkDirty(player)
 	applyLevel(plot, nextLvl)
-	notify(player, "PenUpgraded", { Level = nextLvl, Nests = nextInfo.Nests })
+	notify(player, "PenUpgraded", { Level = nextLvl, Multiplier = nextInfo.CashMultiplier })
 end
 
 local function setupUpgradeSign(player, plot)
@@ -606,7 +613,7 @@ local function clearUpgradeSign(plot)
 		plot.UpgradePrompt = nil
 	end
 	if plot.UpgradeBoard then
-		setBoardText(plot.UpgradeBoard, "Upgrade Pen\nLevel 1")
+		setBoardText(plot.UpgradeBoard, "Upgrade Pen\nx1 Cash")
 	end
 	plot.UpgradeBoard = nil
 end
@@ -725,6 +732,7 @@ local function releasePlot(player)
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.Model:SetAttribute("OwnerName", nil)
 	plot.Model:SetAttribute("PenLevel", nil)
+	player:SetAttribute("CashMultiplier", nil)
 	local pen = plot.Model:FindFirstChild("Pen")
 	if pen then
 		pen:SetAttribute("Level", 1)

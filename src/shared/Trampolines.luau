@@ -122,6 +122,26 @@ function Trampolines.GetPad(trampoline: Instance): BasePart?
 	return widest
 end
 
+-- The UserId of the plot owner a trampoline belongs to: nil when it isn't in
+-- a plot, 0 when the plot is free.
+function Trampolines.OwnerUserId(trampoline: Instance): number?
+	local node = trampoline.Parent
+	while node and node ~= Workspace do
+		local owner = node:GetAttribute("OwnerUserId")
+		if type(owner) == "number" then
+			return owner
+		end
+		node = node.Parent
+	end
+	return nil
+end
+
+-- Training trampolines in a plot only work for the plot's owner.
+function Trampolines.CanUse(trampoline: Instance, userId: number): boolean
+	local owner = Trampolines.OwnerUserId(trampoline)
+	return owner == nil or owner == userId
+end
+
 -- Where the pad is in the world: { Pad, Center, Radius, Top, Bottom }.
 function Trampolines.GetPadInfo(trampoline: Instance)
 	local pad = Trampolines.GetPad(trampoline)
