@@ -33,7 +33,7 @@ local window = Components.Window({
 	Title = "Admin",
 	Icon = "Gear",
 	Parent = gui,
-	Size = UDim2.fromOffset(540, 680),
+	Size = UDim2.fromOffset(540, 740),
 	Colors = Theme.Colors.Purple,
 })
 local content = window.Content
@@ -55,7 +55,7 @@ local function run(action: string, amount: number)
 	end
 end
 
--- Layout (pixels inside the window's content area, which is 504 x 582).
+-- Layout (pixels inside the window's content area, which is 504 x 642).
 local GAP = 12
 local CARD_PAD = 12
 local HEADER_H = 26
@@ -233,8 +233,9 @@ buttonRow(dayNightCard, rowY(1), {
 	{ "Reset Eggs", Theme.Colors.Orange, function() run("ResetEggs", 0) end },
 })
 
--- Eggs card: pick any animal's egg with the arrows and get it in your hands.
-local eggCard = card("EggCard", "Eggs", dayNightY + dayNightHeight + GAP, 1)
+-- Eggs card: pick any animal's egg with the arrows and get it in your hands,
+-- or play its hatch animation right away (only on your screen, nothing saved).
+local eggCard = card("EggCard", "Eggs", dayNightY + dayNightHeight + GAP, 2)
 local eggIndex = 1
 local eggName = Components.Label({
 	Name = "EggName",
@@ -288,6 +289,24 @@ Components.Button({
 	MaxTextSize = 24,
 	ZIndex = 13,
 	OnClick = function() run("GiveEgg", eggIndex) end,
+})
+buttonRow(eggCard, rowY(2), {
+	{ "Test Hatch", Theme.Colors.Purple, function()
+		local hatchUI = player.PlayerGui:FindFirstChild("HatchUI")
+		local preview = hatchUI and hatchUI:FindFirstChild("PreviewHatch")
+		if not preview then
+			Components.Notify(gui, "Hatch screen isn't loaded yet", Theme.Colors.Red[1])
+			return
+		end
+		local eggId = EggConfig.EggOrder[eggIndex]
+		local egg = EggConfig.Eggs[eggId]
+		local pet = egg.Pets[1]
+		window.Close()
+		preview:Fire({
+			EggId = eggId,
+			Pet = { Name = pet.Name, Rarity = pet.Rarity, Weight = math.floor(egg.KgMin * (pet.SizeMul or 1) * 100) / 100 },
+		})
+	end },
 })
 showEgg()
 

@@ -27,7 +27,9 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
+local Animals = require(ReplicatedStorage.Shared.Animals)
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
 local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
 local Format = require(ReplicatedStorage.Shared.Format)
@@ -306,8 +308,55 @@ local function nearNest(player, nest)
 	return root and (root.Position - nest.Part.Position).Magnitude <= S.PenPromptDistance + 6
 end
 
--- A placeholder pet (glowing ball in its rarity color) until pet models exist.
+-- Name / rarity / weight label floating over a shown pet.
+local function petLabel(adornee, pet, height, color)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(200, 50)
+	gui.StudsOffset = Vector3.new(0, height, 0)
+	gui.LightInfluence = 0
+	gui.Adornee = adornee
+	gui.Parent = adornee
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.RichText = true
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = color
+	label.TextStrokeTransparency = 0.2
+	label.Text = string.format("<b>%s</b>\n%s · %.2f kg", pet.Name, pet.Rarity, pet.Weight)
+	label.Parent = gui
+end
+
+-- The hatched animal hops out on the nest, looks around for a few seconds,
+-- then goes away (into the inventory). Old pets with no model get a glowing ball.
 local function showPet(nest, pet)
+	local color = EggConfig.RarityColors[pet.Rarity] or Color3.new(1, 1, 1)
+	local spec = Animals.GetSpec(pet.Name)
+	if spec then
+		local height = math.clamp(3 + (pet.Weight or 1) * 0.12, 3, 7)
+		local rig = Animals.Build(pet.Name, { Parent = nest.Part, Scale = height / (spec.Scale or 3) })
+		local base = eggBase(nest)
+		local heading = math.atan2(base.LookVector.X, base.LookVector.Z)
+		local t = 0
+		rig:Step(0, "idle", 0, base.Position, heading)
+		local sparkles = Instance.new("Sparkles")
+		sparkles.SparkleColor = color
+		sparkles.Parent = rig.Model.PrimaryPart
+		petLabel(rig.Model.PrimaryPart, pet, height + 1.5, color)
+		local conn
+		conn = RunService.Heartbeat:Connect(function(dt)
+			t += dt
+			local hop = if t < 0.6 then math.sin(t / 0.6 * math.pi) * 3 else 0
+			rig:Step(dt, if t < 0.6 then "walk" else "idle", if t < 0.6 then 6 else 0, base.Position + Vector3.new(0, hop, 0), heading + math.sin(t * 0.8) * 0.6)
+		end)
+		task.delay(S.PetShowSeconds, function()
+			conn:Disconnect()
+			rig:Destroy()
+		end)
+		return
+	end
+
 	local ball = Instance.new("Part")
 	ball.Name = "HatchedPet"
 	ball.Shape = Enum.PartType.Ball
@@ -321,22 +370,7 @@ local function showPet(nest, pet)
 	local sparkles = Instance.new("Sparkles")
 	sparkles.SparkleColor = ball.Color
 	sparkles.Parent = ball
-
-	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(200, 50)
-	gui.StudsOffset = Vector3.new(0, ball.Size.Y / 2 + 1.5, 0)
-	gui.LightInfluence = 0
-	gui.Parent = ball
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.RichText = true
-	label.TextScaled = true
-	label.Font = Enum.Font.FredokaOne
-	label.TextColor3 = ball.Color
-	label.TextStrokeTransparency = 0.2
-	label.Text = string.format("<b>%s</b>\n%s · %.2f kg", pet.Name, pet.Rarity, pet.Weight)
-	label.Parent = gui
+	petLabel(ball, pet, ball.Size.Y / 2 + 1.5, ball.Color)
 
 	ball.Parent = nest.Part
 	task.delay(S.PetShowSeconds, function()
