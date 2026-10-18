@@ -10,10 +10,11 @@
 -- and can set a "NoFallCrack" attribute (true) on the Player or Character to
 -- skip fall cracks, for example while a jetpack or parachute is active.
 --
--- A crack knocks you flat for a few seconds (Knockdown) and the egg falls out
--- of your hands onto the ground beside you, wobbles and cracks ("CRACK!"); only
--- you can pick it back up for a moment. The crack that breaks it smashes it
--- into shell bits instead ("SMASH!").
+-- A crack makes you fumble the egg: your arms jerk up, it slips out of your
+-- hands and drops in front of you, cracking the moment it hits the floor
+-- ("CRACK!"), then you fall over next to it for a few seconds (Knockdown).
+-- Only you can pick it back up for a moment. The crack that breaks it smashes
+-- it on the floor instead ("SMASH!").
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -302,24 +303,16 @@ local function animate(seconds, fn)
 	end
 end
 
--- The egg tumbles out of the player's hands onto the ground beside them,
--- bounces and wobbles, then cracks (and lies there to be picked back up) or smashes.
+-- The player fumbles the egg (their arms jerk up and lurch forward: the
+-- FumbleAt pose in Client.Movement.JumpPose), it slips out of their hands and
+-- drops in front of them, and the moment it hits the floor it cracks (and
+-- lies there to be picked back up) or smashes.
+local FUMBLE_HOLD = 0.14 -- seconds of the arms jolting up before it slips
 local function fallOutOfHands(player, data, from, broken)
 	local egg = EggConfig.Eggs[data.EggId]
 	local root = getAlive(player)
-	local side = if root then root.Position + root.CFrame.RightVector * 3 else from.Position
-	local ignore = { eggFolder }
-	if player.Character then
-		table.insert(ignore, player.Character)
-	end
-	local hit = findGround(side + Vector3.new(0, 3, 0), ignore)
-	if not hit or hit.Position.Y < from.Position.Y - 40 then
-		-- Nothing to land on beside you: it's gone.
-		EggFactory.BreakEffect(from.Position, egg.Color)
-		notify(player, "EggBroke", EggFactory.Info(data))
-		return
-	end
-	local ground = hit.Position
+	local forward = if root then Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z) else Vector3.zero
+	forward = if forward.Magnitude > 0.1 then forward.Unit else Vector3.zero
 
 	local display = EggFactory.Build(data)
 	display.Name = "FallingEgg"
@@ -330,40 +323,54 @@ local function fallOutOfHands(player, data, from, broken)
 	display.CFrame = from
 	display.Parent = workspace
 	local half = display.Size.Y / 2
-	local landAt = ground + Vector3.new(0, half, 0)
-	local axis = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
-	axis = if axis.Magnitude > 0.1 then axis.Unit else Vector3.xAxis
 
-	-- 1. Tumble out in an arc.
+	-- 1. Jolts up a little in the player's hands.
 	local start = from.Position
-	animate(0.5, function(a)
-		local p = start:Lerp(landAt, a) + Vector3.new(0, math.sin(a * math.pi) * 2.5, 0)
-		display.CFrame = CFrame.new(p) * CFrame.fromAxisAngle(axis, a * math.pi * 1.5 * (1 - a))
-	end)
-	-- 2. Land: a little bounce and wobble.
-	animate(0.45, function(a)
-		local hop = math.abs(math.sin(a * math.pi * 2)) * (1 - a) * 0.8
-		local wobble = math.sin(a * math.pi * 5) * 0.35 * (1 - a)
-		display.CFrame = CFrame.new(landAt + Vector3.new(0, hop, 0)) * CFrame.Angles(0, 0, wobble)
+	animate(FUMBLE_HOLD, function(a)
+		display.CFrame = CFrame.new(start + Vector3.new(0, math.sin(a * math.pi * 0.5) * 0.7, 0)) * CFrame.Angles(0, 0, a * 0.3)
 	end)
 
-	if broken then
-		-- 3a. Shakes hard, then smashes.
-		animate(0.35, function(a)
-			display.CFrame = CFrame.new(landAt + Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * 0.15 * a)
-		end)
+	-- 2. Slips forward out of the hands and drops with gravity.
+	local ignore = { eggFolder, display }
+	if player.Character then
+		table.insert(ignore, player.Character)
+	end
+	local top = display.Position
+	local landXZ = top + forward * 2.6
+	local hit = findGround(landXZ + Vector3.new(0, 2, 0), ignore)
+	if not hit or hit.Position.Y < top.Y - 60 then
+		-- Nothing under it: it's gone over the edge.
 		display:Destroy()
+		EggFactory.BreakEffect(top, egg.Color)
+		notify(player, "EggBroke", EggFactory.Info(data))
+		return
+	end
+	local ground = hit.Position
+	local landAt = Vector3.new(landXZ.X, ground.Y + half, landXZ.Z)
+	local g = workspace.Gravity
+	local up = 6 -- small toss as it pops out of the hands
+	local drop = top.Y - landAt.Y
+	local fallTime = (up + math.sqrt(up * up + 2 * g * math.max(drop, 0))) / g
+	local spinAxis = forward:Cross(Vector3.yAxis)
+	spinAxis = if spinAxis.Magnitude > 0.1 then spinAxis.Unit else Vector3.xAxis
+	animate(fallTime, function(a)
+		local t = a * fallTime
+		local y = top.Y + up * t - 0.5 * g * t * t
+		local flat = top:Lerp(landAt, a)
+		display.CFrame = CFrame.new(flat.X, math.max(y, landAt.Y), flat.Z) * CFrame.fromAxisAngle(spinAxis, -a * 2.2)
+	end)
+
+	-- 3. Hits the floor: smashes, or cracks right there.
+	display:Destroy()
+	if broken then
 		EggFactory.BreakEffect(landAt, egg.Color, 14)
 		EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "SMASH!", Color3.fromRGB(255, 80, 80))
 		notify(player, "EggBroke", EggFactory.Info(data))
 		return
 	end
-
-	-- 3b. Cracks: a few chips fly off and it stays there for you to grab again.
-	EggFactory.BreakEffect(landAt, egg.Color, 3)
+	EggFactory.BreakEffect(landAt, egg.Color, 4)
 	EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "CRACK!", Color3.fromRGB(255, 220, 90))
-	display:Destroy()
-	EggCarry.SpawnWorldEgg(data, CFrame.new(ground) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), {
+	EggCarry.SpawnWorldEgg(data, CFrame.new(landXZ.X, ground.Y, landXZ.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), {
 		Lifetime = S.DroppedEggLifetime,
 		OwnerUserId = player.UserId,
 		ProtectedUntil = os.clock() + KNOCK_SECONDS + 3,
@@ -371,8 +378,9 @@ local function fallOutOfHands(player, data, from, broken)
 	notify(player, "EggCracked", EggFactory.Info(data))
 end
 
--- Cracks the carried egg: the player is knocked down and the egg falls out
--- of their hands (see fallOutOfHands). Enough cracks smash it.
+-- Cracks the carried egg: the player fumbles it (see fallOutOfHands), then
+-- falls over next to it for a few seconds. Enough cracks smash it.
+local FUMBLE_BEFORE_FALL = 0.5 -- seconds of the fumble before they go down
 function EggCarry.AddCracks(player, amount)
 	local entry = carried[player]
 	if not entry then
@@ -383,8 +391,13 @@ function EggCarry.AddCracks(player, amount)
 	local from = entry.Part.CFrame
 	local broken = data.Cracks >= S.MaxCracks
 	detach(player)
-	Knockdown.Fall(player, KNOCK_SECONDS)
+	if player.Character then
+		player.Character:SetAttribute("FumbleAt", workspace:GetServerTimeNow())
+	end
 	task.spawn(fallOutOfHands, player, data, from, broken)
+	task.delay(FUMBLE_BEFORE_FALL, function()
+		Knockdown.Fall(player, KNOCK_SECONDS)
+	end)
 end
 
 -- Cloud steps grow with each gap (60-140 studs near the top), so a normal hop

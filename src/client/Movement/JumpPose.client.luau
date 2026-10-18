@@ -39,6 +39,56 @@ local POSES = {
 	},
 }
 
+-- Fumble keyframes: { time, pose }. Blends between them, then out at the end.
+local FUMBLE = {
+	{ 0, {
+		ArmL = Vector3.new(2.9, 0, -0.15), ArmR = Vector3.new(2.9, 0, 0.15),
+		ElbowL = Vector3.new(0.6, 0, 0), ElbowR = Vector3.new(0.6, 0, 0),
+		LegL = Vector3.new(0, 0, -0.05), LegR = Vector3.new(0, 0, 0.05),
+		KneeL = Vector3.zero, KneeR = Vector3.zero,
+	} },
+	{ 0.14, {
+		ArmL = Vector3.new(3.2, 0, -0.35), ArmR = Vector3.new(3.2, 0, 0.35), -- jolt up and back
+		ElbowL = Vector3.new(0.25, 0, 0), ElbowR = Vector3.new(0.25, 0, 0),
+		LegL = Vector3.new(-0.2, 0, -0.05), LegR = Vector3.new(-0.2, 0, 0.05),
+		KneeL = Vector3.new(-0.2, 0, 0), KneeR = Vector3.new(-0.2, 0, 0),
+	} },
+	{ 0.32, {
+		ArmL = Vector3.new(1.5, 0, -0.25), ArmR = Vector3.new(1.5, 0, 0.25), -- grabbing after it
+		ElbowL = Vector3.new(0.15, 0, 0), ElbowR = Vector3.new(0.15, 0, 0),
+		LegL = Vector3.new(0.6, 0, -0.1), LegR = Vector3.new(-0.35, 0, 0.1), -- stumble step
+		KneeL = Vector3.new(-0.5, 0, 0), KneeR = Vector3.new(-0.2, 0, 0),
+	} },
+	{ 0.5, {
+		ArmL = Vector3.new(0.9, 0, -0.9), ArmR = Vector3.new(0.9, 0, 0.9), -- arms out, losing balance
+		ElbowL = Vector3.new(0.4, 0, 0), ElbowR = Vector3.new(0.4, 0, 0),
+		LegL = Vector3.new(0.5, 0, -0.15), LegR = Vector3.new(-0.3, 0, 0.15),
+		KneeL = Vector3.new(-0.4, 0, 0), KneeR = Vector3.new(-0.3, 0, 0),
+	} },
+}
+local FUMBLE_TIME = 0.6
+
+local function fumblePose(t: number)
+	if t <= 0 or t >= FUMBLE_TIME then
+		return nil, 0
+	end
+	local a, b = FUMBLE[1], FUMBLE[#FUMBLE]
+	for i = 1, #FUMBLE - 1 do
+		if t >= FUMBLE[i][1] and t < FUMBLE[i + 1][1] then
+			a, b = FUMBLE[i], FUMBLE[i + 1]
+			break
+		end
+	end
+	local f = if b[1] > a[1] then math.clamp((t - a[1]) / (b[1] - a[1]), 0, 1) else 1
+	f = f * f * (3 - 2 * f) -- smooth step
+	local pose = {}
+	for role, angles in a[2] do
+		pose[role] = angles:Lerp(b[2][role], f)
+	end
+	local weight = math.min(t / 0.06, 1, (FUMBLE_TIME - t) / 0.1)
+	return pose, weight
+end
+
 -- Joint names per rig: R15 joints sit in the limb, R6 joints in the Torso.
 local R15_JOINTS = {
 	ArmL = { "LeftUpperArm", "LeftShoulder" }, ArmR = { "RightUpperArm", "RightShoulder" },
@@ -128,6 +178,22 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 			rig.Air = 0
 			continue
+		end
+
+		local fumbleAt = character:GetAttribute("FumbleAt")
+		if type(fumbleAt) == "number" then
+			local pose, weight = fumblePose(workspace:GetServerTimeNow() - fumbleAt)
+			if pose then
+				for role, j in rig.Joints do
+					if j.Motor.Parent and pose[role] then
+						local angles = pose[role] * weight
+						j.Motor.C0 = CFrame.new(j.Base.Position) * CFrame.Angles(angles.X, angles.Y, angles.Z) * j.Base.Rotation
+					end
+				end
+				rig.Posed = true
+				rig.Air = 0
+				continue
+			end
 		end
 
 		local inAir = not grounded(character, rig)
