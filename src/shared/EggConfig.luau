@@ -78,7 +78,7 @@ Egg fields:
 	Color             egg color
 	KgMin, KgMax      random size range; heavy eggs are rarer
 	SpawnWeight       how often this egg is picked among the eggs of the same island
-	GrowSeconds       pen grow time before hatching
+	GrowSeconds       pen grow time before hatching: 5s on Forest, x2.5 per island up
 	GrowSecondsPerKg  extra grow time for every kg
 	Pets              list of { Name, Rarity, Chance, SizeMul, Value }
 	                  Chance is a weight (they don't need to add up to 100)
@@ -92,8 +92,8 @@ EggConfig.Eggs = {
 		KgMin = 1,
 		KgMax = 6,
 		SpawnWeight = 100,
-		GrowSeconds = 120,
-		GrowSecondsPerKg = 10,
+		GrowSeconds = 5,
+		GrowSecondsPerKg = 0.5,
 		Pets = {
 			{ Name = "Mossy Pup", Rarity = "Common", Chance = 55, SizeMul = 1, Value = 10 },
 			{ Name = "Acorn Owl", Rarity = "Uncommon", Chance = 28, SizeMul = 0.8, Value = 25 },
@@ -109,8 +109,8 @@ EggConfig.Eggs = {
 		KgMin = 1.5,
 		KgMax = 8,
 		SpawnWeight = 100,
-		GrowSeconds = 240,
-		GrowSecondsPerKg = 15,
+		GrowSeconds = 13,
+		GrowSecondsPerKg = 1.3,
 		Pets = {
 			{ Name = "Sandy Crab", Rarity = "Common", Chance = 55, SizeMul = 0.9, Value = 20 },
 			{ Name = "Coconut Parrot", Rarity = "Uncommon", Chance = 28, SizeMul = 0.8, Value = 50 },
@@ -126,8 +126,8 @@ EggConfig.Eggs = {
 		KgMin = 2,
 		KgMax = 10,
 		SpawnWeight = 100,
-		GrowSeconds = 420,
-		GrowSecondsPerKg = 20,
+		GrowSeconds = 31,
+		GrowSecondsPerKg = 3,
 		Pets = {
 			{ Name = "Petal Bunny", Rarity = "Common", Chance = 55, SizeMul = 0.9, Value = 40 },
 			{ Name = "Koi Kitten", Rarity = "Uncommon", Chance = 28, SizeMul = 1, Value = 100 },
@@ -143,8 +143,8 @@ EggConfig.Eggs = {
 		KgMin = 2.5,
 		KgMax = 12,
 		SpawnWeight = 100,
-		GrowSeconds = 600,
-		GrowSecondsPerKg = 25,
+		GrowSeconds = 78,
+		GrowSecondsPerKg = 8,
 		Pets = {
 			{ Name = "Gummy Bear", Rarity = "Common", Chance = 55, SizeMul = 1, Value = 80 },
 			{ Name = "Lollipop Lamb", Rarity = "Uncommon", Chance = 28, SizeMul = 1, Value = 200 },
@@ -160,8 +160,8 @@ EggConfig.Eggs = {
 		KgMin = 3,
 		KgMax = 14,
 		SpawnWeight = 100,
-		GrowSeconds = 900,
-		GrowSecondsPerKg = 30,
+		GrowSeconds = 195,
+		GrowSecondsPerKg = 20,
 		Pets = {
 			{ Name = "Snow Penguin", Rarity = "Common", Chance = 55, SizeMul = 0.9, Value = 160 },
 			{ Name = "Frost Fox", Rarity = "Uncommon", Chance = 28, SizeMul = 1, Value = 400 },
@@ -177,8 +177,8 @@ EggConfig.Eggs = {
 		KgMin = 3.5,
 		KgMax = 16,
 		SpawnWeight = 100,
-		GrowSeconds = 1200,
-		GrowSecondsPerKg = 40,
+		GrowSeconds = 490,
+		GrowSecondsPerKg = 50,
 		Pets = {
 			{ Name = "Gem Beetle", Rarity = "Common", Chance = 55, SizeMul = 0.8, Value = 320 },
 			{ Name = "Quartz Bat", Rarity = "Uncommon", Chance = 28, SizeMul = 0.9, Value = 800 },
@@ -194,8 +194,8 @@ EggConfig.Eggs = {
 		KgMin = 4,
 		KgMax = 18,
 		SpawnWeight = 100,
-		GrowSeconds = 1800,
-		GrowSecondsPerKg = 50,
+		GrowSeconds = 1220,
+		GrowSecondsPerKg = 120,
 		Pets = {
 			{ Name = "Moon Mouse", Rarity = "Common", Chance = 55, SizeMul = 0.8, Value = 640 },
 			{ Name = "Comet Cat", Rarity = "Uncommon", Chance = 28, SizeMul = 1, Value = 1600 },
@@ -213,8 +213,8 @@ EggConfig.Eggs = {
 		KgMin = 5,
 		KgMax = 25,
 		SpawnWeight = 100,
-		GrowSeconds = 3600,
-		GrowSecondsPerKg = 60,
+		GrowSeconds = 3050,
+		GrowSecondsPerKg = 300,
 		Pets = {
 			{ Name = "Ember Lizard", Rarity = "Uncommon", Chance = 50, SizeMul = 0.9, Value = 3000 },
 			{ Name = "Magma Hound", Rarity = "Rare", Chance = 32, SizeMul = 1.2, Value = 7500 },
