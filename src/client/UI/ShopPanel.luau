@@ -42,12 +42,7 @@ local function shopColors(id: string)
 end
 
 local function powerText(entry): string
-	if entry.JumpPower then
-		return `⬆️ {entry.JumpPower} Jump`
-	elseif entry.Multiplier then
-		return `⬆️ x{entry.Multiplier} Jump`
-	end
-	return "⬆️ Jump"
+	return `⬆️ {VertexConfig.PerkText(entry)}`
 end
 
 local function gearStat(gear): string?

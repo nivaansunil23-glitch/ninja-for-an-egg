@@ -43,12 +43,7 @@ local function safe(name: string): string
 end
 
 local function powerText(entry): string
-	if entry.JumpPower then
-		return `{entry.JumpPower} jump power`
-	elseif entry.Multiplier then
-		return `x{entry.Multiplier} jump`
-	end
-	return "a bigger jump"
+	return VertexConfig.PerkText(entry)
 end
 
 -- Pets the Sell shop would buy right now (equipped ones are never sold).
@@ -168,22 +163,46 @@ function Conversations.Vertex(talk)
 	local shop = talk.Shop
 	talk.Say(pick(shop.Greetings), "Wave")
 	while true do
-		local choice = talk.Choose({
+		local tier = ClientState.Data and ClientState.Data.VertexTier or 1
+		local current = VertexConfig.Get(tier) or VertexConfig.Tiers[1]
+		local nextTier = VertexConfig.Get(tier + 1)
+		local options = {
 			{ Text = shop.Browse, Colors = talk.Colors },
 			{ Text = shop.Ask, Colors = Theme.Colors.Purple },
 			talk.NeverMind,
-		})
+		}
+		-- One-tap upgrade to the next tier, while there is one.
+		if nextTier then
+			table.insert(options, 2, { Text = shop.Upgrade, Colors = Theme.Colors.Mint })
+		end
+		local choice = talk.Choose(options)
+		local picked = options[choice]
 		if choice == 1 then
 			talk.Say(shop.BrowseReply, "Point")
 			return talk.OpenShop()
-		elseif choice == 2 then
-			local tier = ClientState.Data and ClientState.Data.VertexTier or 1
-			local current = VertexConfig.Get(tier) or VertexConfig.Tiers[1]
-			local nextTier = VertexConfig.Get(tier + 1)
-			local what = if current.Multiplier
-				then "A vertex multiplies the jump power you train on the trampoline, so you reach higher islands."
-				else "A vertex powers up your jump so you can reach higher islands."
-			local line = `{what} You have the {current.Name}, with {powerText(current)}.`
+		elseif nextTier and picked.Text == shop.Upgrade then
+			local cash = player:GetAttribute("Money") or 0
+			if cash < nextTier.Price then
+				talk.Say(`The {nextTier.Name} costs {money(nextTier.Price)}. You need {money(nextTier.Price - cash)} more!`)
+			else
+				talk.Say(`The {nextTier.Name} gives {powerText(nextTier)} for {money(nextTier.Price)}. Want it?`, "Point")
+				local answer = talk.Choose({
+					{ Text = shop.Deal, Colors = Theme.Colors.Mint },
+					{ Text = shop.NoDeal, Colors = Theme.Colors.Red },
+				})
+				if answer == 1 then
+					local ok, message = talk.Invoke("BuyVertex", tier + 1)
+					if ok then
+						talk.Say(`{pick(shop.Thanks)} You now have the {nextTier.Name}!`, "Cheer")
+					else
+						talk.Say(message or "Hmm, something went wrong. Try again!")
+					end
+				else
+					talk.Say("Come back when you're ready!")
+				end
+			end
+		elseif picked.Text == shop.Ask then
+			local line = `A vertex multiplies the jump power you train on the trampoline, so you reach higher islands. You have the {current.Name}, with {powerText(current)}.`
 			if nextTier then
 				line ..= ` Next is the {nextTier.Name}: {powerText(nextTier)} for {money(nextTier.Price)}!`
 			else
