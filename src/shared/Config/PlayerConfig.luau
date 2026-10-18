@@ -11,6 +11,6 @@ return {
 	-- Height the tracker bar treats as "full" until the player's best goes past it.
 	HeightTrackerMax = 1500,
 
-	MaxEquippedPets = 4,
+	MaxEquippedPets = 12, -- equipped pets live in your pen and earn; unequip one to fit another
 	MaxSellPerRequest = 200,
 }

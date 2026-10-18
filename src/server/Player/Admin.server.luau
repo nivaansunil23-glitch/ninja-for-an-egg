@@ -9,6 +9,7 @@
 --   "ForceDay", "ForceNight", "SkipPhase"   day/night (World/DayNightCycle)
 --   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
+--   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +26,7 @@ local DayNightCycle = require(Server:WaitForChild("World"):WaitForChild("DayNigh
 local EggSpawner = require(Server:WaitForChild("Eggs"):WaitForChild("EggSpawner"))
 local EggCarry = require(Server:WaitForChild("Eggs"):WaitForChild("EggCarry"))
 local EggFactory = require(Server:WaitForChild("Eggs"):WaitForChild("EggFactory"))
+local PenService = require(Server:WaitForChild("Eggs"):WaitForChild("PenService"))
 local EggConfig = require(Shared:WaitForChild("EggConfig"))
 
 local MAX_MONEY_PER_CLICK = 1e12
@@ -114,6 +116,9 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 			return false, "Can't carry an egg right now"
 		end
 		return true, "Got a " .. egg.DisplayName
+	elseif action == "ReadyEggs" then
+		local n = PenService.ReadyAll(player)
+		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"
 	end
 	return false, "Unknown action"
 end

@@ -1,38 +1,42 @@
 --!nonstrict
 -- Pens: every player automatically claims a free plot from Workspace.Map.Pens
--- when they join, and frees it when they leave. Each plot has one big pen with
--- several "Nest" parts; every Nest holds one egg. Bring a carried egg to one of
--- your nests to place it, wait out the grow countdown, then hatch it into a pet.
+-- when they join, and frees it when they leave. Each plot has one big fenced
+-- pen. Walk inside your pen while carrying an egg and press Place Egg (the
+-- Drop Egg button turns into it, G on PC) to set it down right where you
+-- stand, wait out the grow countdown, then hold E on the egg to hatch it.
+-- Your equipped pets (up to PlayerConfig.MaxEquippedPets) live in the pen and
+-- earn money; the client draws them wandering (Client.World.PenPets) from the
+-- plot's PenPets attribute, each with its $/s above its head, and the plot
+-- sign shows the pen's total $/s.
 --
 -- Plot setup (done in the map):
 --   Workspace.Map.Pens.<PlotName>       one Model per player plot (PlotId attribute sorts them)
---     ...Nest (BasePart)                one per egg slot, any depth inside the plot.
---                                       Optional "NestIndex" attribute keeps saves stable.
---       EggSpot (optional sibling or child) where the egg's bottom sits
---     ...Sign (BasePart)                its SurfaceGui text shows the owner's name
---                                       ("Empty Plot" when free); no text = billboard
---
+--     Pen.Floor (BasePart)              the pen's floor; eggs go anywhere on it
+--     ...Sign (BasePart)                its SurfaceGui text shows the owner's name and
+--                                       $/s ("Empty Plot" when free); no text = billboard
 --     ...UpgradeSign (with a "Board" part) gets an "Upgrade Pen" prompt and its
 --                                       SurfaceGui text shows the next level and price
 --
 -- Pen upgrades (EggConfig.PenLevels): each level raises the owner's cash
--- multiplier (player attribute CashMultiplier). All nests are always open.
--- Saved as data.Eggs.PenLevel.
+-- multiplier (player attribute CashMultiplier). Saved as data.Eggs.PenLevel.
 --
--- Set on the plot: OwnerUserId (0 when free), OwnerName, PenLevel attributes.
--- Set on the Player: PlotName, PenLevel, CashMultiplier attributes.
+-- Set on the plot: OwnerUserId (0 when free), OwnerName, PenLevel,
+--   PenPets (JSON list of { Id, Name, Rarity, Weight, Income }), PenIncome,
+--   LastHatch (JSON { Id, X, Z }: where the newest pet hopped out, floor space).
+-- Set on the Player: PlotName, PenLevel, CashMultiplier, InOwnPen attributes.
 -- Players spawn (and respawn) at their plot's PlotSpawn marker.
--- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
--- ReadyAt, so they keep growing while the player is offline.
+-- Growing eggs are saved in PlayerData (data.Eggs.Pens[key]) with a real-time
+-- ReadyAt and Spot = { X, Z } on the floor, so they keep growing offline.
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
-local Animals = require(ReplicatedStorage.Shared.Animals)
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
 local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
 local Format = require(ReplicatedStorage.Shared.Format)
+local PlayerConfig = require(ReplicatedStorage.Shared.Config.PlayerConfig)
+local SellConfig = require(ReplicatedStorage.Shared.Config.SellConfig)
 local EggCarry = require(script.Parent.EggCarry)
 local EggFactory = require(script.Parent.EggFactory)
 local EggMap = require(script.Parent.EggMap)
@@ -40,14 +44,17 @@ local EggSave = require(script.Parent.EggSave)
 local Hatching = require(script.Parent.Hatching)
 
 local S = EggConfig.Settings
+local MAX_EGGS = S.MaxPenEggs or 6
+local EDGE = S.PenEdgeMargin or 3 -- studs eggs (and the player) must stay inside the fence
+local EGG_GAP = S.PenEggSpacing or 4 -- studs between two eggs
 
 local PenService = {}
 
-local plots = {} -- [Model] = { Model, Owner, Nests = { nest } }
+local plots = {} -- [Model] = { Model, Owner, Floor, Eggs = { [key] = slot } }
 local playerPlot = {} -- [Player] = plot state
 local pensFolder = nil
 
--- nest = { Key, Part, Prompt, Egg, Visual, Timer }
+-- slot = { Key, Egg, Visual, Prompt, Timer }
 
 local function notify(player, kind, info)
 	EggRemotes.EggNotify:FireClient(player, kind, info)
@@ -69,137 +76,191 @@ local function formatTime(seconds)
 	return string.format("%ds", s)
 end
 
-local function nestPath(plotModel, nestPart)
-	return string.sub(nestPart:GetFullName(), #plotModel:GetFullName() + 2)
-end
-
--- Several nests in one big pen can share the name "Nest", so keys come from a
--- NestIndex attribute when there is one, otherwise the path plus a number
--- counted in a fixed order (left to right, front to back) inside the plot.
-local function findNests(plotModel)
-	local nests = {}
-	for _, d in plotModel:GetDescendants() do
-		-- "NestSpot" = an empty slot (invisible marker) that gets a nest when the pen is upgraded.
-		if d:IsA("BasePart") and (d.Name == "Nest" or d.Name == "NestSpot") then
-			table.insert(nests, { Path = nestPath(plotModel, d), Part = d, IsSpot = d.Name == "NestSpot" })
-		end
+local function findFloor(plotModel)
+	local pen = plotModel:FindFirstChild("Pen")
+	local floor = pen and pen:FindFirstChild("Floor")
+	if not (floor and floor:IsA("BasePart")) then
+		floor = plotModel:FindFirstChild("Floor", true)
 	end
-	local pivot = plotModel:GetPivot()
-	for _, nest in nests do
-		nest.Local = pivot:PointToObjectSpace(nest.Part.Position)
-	end
-	table.sort(nests, function(a, b)
-		if a.Path ~= b.Path then
-			return a.Path < b.Path
-		end
-		if math.abs(a.Local.X - b.Local.X) > 0.5 then
-			return a.Local.X < b.Local.X
-		end
-		return a.Local.Z < b.Local.Z
-	end)
-	local seen = {}
-	for order, nest in nests do
-		local index = nest.Part:GetAttribute("NestIndex")
-		if type(index) == "number" then
-			nest.Key = "Nest" .. tostring(index)
-			nest.Index = index
-		else
-			seen[nest.Path] = (seen[nest.Path] or 0) + 1
-			nest.Key = nest.Path .. "#" .. seen[nest.Path]
-			nest.Index = order
-		end
-		nest.Local = nil
-	end
-	-- Nests unlock in NestIndex order as the pen is upgraded.
-	table.sort(nests, function(a, b)
-		return a.Index < b.Index
-	end)
-	return nests
-end
-
--- Where the egg's bottom sits: an EggSpot next to or inside the nest, else the nest top.
-local function eggBase(nest)
-	local base = nest.Shell or nest.Part
-	local spot = nest.Part:FindFirstChild("EggSpot")
-		or (nest.Part.Parent and nest.Part.Parent:FindFirstChild("EggSpot"))
-	if spot and spot:IsA("BasePart") then
-		-- Only trust a sibling spot when it's actually above this nest.
-		local offset = spot.Position - base.Position
-		if Vector3.new(offset.X, 0, offset.Z).Magnitude < math.max(base.Size.X, base.Size.Z, 4) then
-			return CFrame.new(spot.Position) * base.CFrame.Rotation
-		end
-	end
-	return base.CFrame * CFrame.new(0, base.Size.Y / 2, 0)
-end
-
--- Unlocked NestSpots get a copy of one of the pen's real nests; locked ones lose it.
-local function setShell(plot, nest)
-	if not nest.IsSpot then
-		return
-	end
-	if not nest.Unlocked then
-		if nest.Shell then
-			nest.Shell:Destroy()
-			nest.Shell = nil
-		end
-		return
-	end
-	if nest.Shell and nest.Shell.Parent then
-		return
-	end
-	local template
-	for _, other in plot.Nests do
-		if not other.IsSpot then
-			template = other.Part
-			break
-		end
-	end
-	if not template then
-		return
-	end
-	local shell = template:Clone()
-	shell:ClearAllChildren()
-	for name in shell:GetAttributes() do
-		shell:SetAttribute(name, nil)
-	end
-	shell.Name = "UpgradedNest"
-	shell.Anchored = true
-	local spot = nest.Part
-	shell.CFrame = spot.CFrame * CFrame.new(0, -spot.Size.Y / 2 + template.Size.Y / 2, 0)
-	shell.Parent = spot.Parent
-	nest.Shell = shell
-end
-
--- Slot models carry an Unlocked attribute the map (and UI) can read.
-local function setSlotUnlocked(nest, unlocked)
-	local slot = nest.Part.Parent
-	if slot and slot:GetAttribute("SlotIndex") ~= nil then
-		slot:SetAttribute("Unlocked", unlocked)
-	end
+	return if floor and floor:IsA("BasePart") then floor else nil
 end
 
 local function addPlot(plotModel)
 	if plots[plotModel] or not plotModel:IsA("Model") then
 		return
 	end
-	plots[plotModel] = { Model = plotModel, Owner = nil, Nests = findNests(plotModel) }
+	plots[plotModel] = { Model = plotModel, Owner = nil, Floor = findFloor(plotModel), Eggs = {} }
 end
 
-local function clearVisual(nest)
-	if nest.Visual then
-		nest.Visual:Destroy()
-		nest.Visual = nil
-		nest.Timer = nil
+-- Floor-space X/Z of a world position, and whether it's inside the fence.
+local function floorSpot(plot, position)
+	local p = plot.Floor.CFrame:PointToObjectSpace(position)
+	return Vector2.new(p.X, p.Z)
+end
+
+local function insideFloor(plot, spot, margin)
+	local half = plot.Floor.Size / 2
+	return math.abs(spot.X) <= half.X - margin and math.abs(spot.Y) <= half.Z - margin
+end
+
+-- Where an egg's bottom sits for a saved Spot.
+local function spotCFrame(plot, spot)
+	return plot.Floor.CFrame * CFrame.new(spot.X, plot.Floor.Size.Y / 2, spot.Z)
+end
+
+local function eggCount(plot)
+	local n = 0
+	for _ in plot.Eggs do
+		n += 1
+	end
+	return n
+end
+
+-- A free spot for an old saved egg that has none (used to sit on a nest):
+-- the first point of a grid over the floor that's clear of other eggs.
+local function defaultSpot(plot)
+	local half = plot.Floor.Size / 2
+	for row = 0, 3 do
+		for col = 0, 5 do
+			local x = -half.X + EDGE + 2 + col * (half.X * 2 - 2 * EDGE - 4) / 5
+			local z = -half.Z + EDGE + 2 + row * (half.Z * 2 - 2 * EDGE - 4) / 3
+			local free = true
+			for _, slot in plot.Eggs do
+				local s = slot.Egg.Spot
+				if s and (Vector2.new(s.X, s.Z) - Vector2.new(x, z)).Magnitude < EGG_GAP then
+					free = false
+					break
+				end
+			end
+			if free then
+				return { X = x, Z = z }
+			end
+		end
+	end
+	return { X = 0, Z = 0 }
+end
+
+local function clearVisual(slot)
+	if slot.Visual then
+		slot.Visual:Destroy()
+	end
+	slot.Visual, slot.Prompt, slot.Timer = nil, nil, nil
+end
+
+-- Pets ---------------------------------------------------------------------
+
+local function equippedPets(data)
+	local list = {}
+	for id, pet in data.Pets do
+		if pet.Equipped then
+			table.insert(list, { id, pet })
+		end
+	end
+	table.sort(list, function(a, b)
+		return a[1] < b[1]
+	end)
+	return list
+end
+
+-- Writes the owner's name and pen income on the plot sign (nil = free plot).
+-- Uses the sign's own SurfaceGui labels if it has them, otherwise floats a label above it.
+local EMPTY_SIGN_TEXT = "Empty Plot"
+
+local function setSign(plot, text)
+	local sign = plot.Model:FindFirstChild("Sign", true)
+	if sign and not sign:IsA("BasePart") then
+		sign = sign:FindFirstChildWhichIsA("BasePart", true)
+	end
+	sign = sign or plot.Model.PrimaryPart
+	if not sign then
+		return
+	end
+
+	local found = false
+	for _, d in sign:GetDescendants() do
+		if (d:IsA("TextLabel") or d:IsA("TextBox")) and d:FindFirstAncestorWhichIsA("SurfaceGui") then
+			d.Text = text or EMPTY_SIGN_TEXT
+			found = true
+		end
+	end
+	if found then
+		return
+	end
+
+	local old = sign:FindFirstChild("OwnerLabel")
+	if old then
+		old:Destroy()
+	end
+	if not text then
+		return
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "OwnerLabel"
+	gui.Size = UDim2.fromOffset(220, 56)
+	gui.StudsOffset = Vector3.new(0, sign.Size.Y / 2 + 2, 0)
+	gui.LightInfluence = 0
+	gui.Parent = sign
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextStrokeTransparency = 0.2
+	label.Text = text
+	label.Parent = gui
+end
+
+-- Puts the owner's equipped pets on the plot for the clients to draw, and
+-- the total $/s on the sign. Cheap to call often: only writes on changes.
+local function publishPets(plot)
+	local owner = plot.Owner
+	local data = owner and EggSave.WaitForData(owner)
+	if not data then
+		return
+	end
+	local multiplier = owner:GetAttribute("CashMultiplier") or 1
+	local list, total = {}, 0
+	for _, entry in equippedPets(data) do
+		local pet = entry[2]
+		local income = math.floor(SellConfig.GetIncome(pet) * multiplier + 0.5)
+		total += income
+		table.insert(list, { Id = entry[1], Name = pet.Name, Rarity = pet.Rarity, Weight = pet.Weight, Income = income })
+	end
+	local json = HttpService:JSONEncode(list)
+	if plot.Model:GetAttribute("PenPets") ~= json then
+		plot.Model:SetAttribute("PenPets", json)
+	end
+	if plot.Model:GetAttribute("PenIncome") ~= total or plot.SignText == nil then
+		plot.Model:SetAttribute("PenIncome", total)
+		plot.SignText = string.format("%s's Pen\n%s/s", owner.DisplayName, Format.Money(total))
+		setSign(plot, plot.SignText)
 	end
 end
 
--- Glowing, steaming egg sitting on the nest with a countdown above it.
-local function showVisual(nest)
-	clearVisual(nest)
-	local data = nest.Egg
+-- Eggs in the pen ----------------------------------------------------------
+
+local function refreshSlot(slot)
+	if not slot.Prompt then
+		return
+	end
+	local left = slot.Egg.ReadyAt - os.time()
+	if slot.Timer then
+		slot.Timer.Text = left > 0 and ("Egg " .. formatTime(left)) or "Ready to hatch!"
+	end
+	slot.Prompt.Enabled = left <= 0
+end
+
+local hatchEgg
+
+-- Glowing, steaming egg sitting on the pen floor with a countdown above it,
+-- and the Hatch prompt on it (shown to the owner only, by the client).
+local function showVisual(plot, slot)
+	clearVisual(slot)
+	local data = slot.Egg
 	local part = EggFactory.Build(data)
 	part.Anchored = true
-	part.CFrame = eggBase(nest) * CFrame.new(0, part.Size.Y / 2, 0)
+	part.CFrame = spotCFrame(plot, data.Spot) * CFrame.new(0, part.Size.Y / 2, 0)
 	part:SetAttribute("State", "Pen")
 	part:SetAttribute("ReadyAt", data.ReadyAt)
 
@@ -233,275 +294,138 @@ local function showVisual(nest)
 	label.TextStrokeTransparency = 0.3
 	label.Parent = gui
 
-	part.Parent = nest.Part
-	nest.Visual = part
-	nest.Timer = label
-end
-
--- "Locked" label over nests the pen level hasn't unlocked yet.
-local function setLockLabel(nest, text)
-	local old = nest.Part:FindFirstChild("LockLabel")
-	if not text then
-		if old then
-			old:Destroy()
-		end
-		return
-	end
-	if old then
-		old.Text.Text = text
-		return
-	end
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "LockLabel"
-	gui.Size = UDim2.fromOffset(150, 34)
-	gui.StudsOffset = Vector3.new(0, nest.Part.Size.Y / 2 + 2.5, 0)
-	gui.MaxDistance = 60
-	gui.LightInfluence = 0
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.TextScaled = true
-	label.Font = Enum.Font.FredokaOne
-	label.TextColor3 = Color3.fromRGB(255, 210, 120)
-	label.TextStrokeTransparency = 0.3
-	label.Text = text
-	label.Parent = gui
-	gui.Parent = nest.Part
-end
-
-local function refreshNest(nest)
-	local prompt = nest.Prompt
-	if not prompt then
-		return
-	end
-	if not nest.Egg then
-		if nest.Unlocked then
-			setLockLabel(nest, nil)
-			prompt.ActionText = "Place Egg"
-			prompt.ObjectText = "Empty Nest"
-			prompt.Enabled = true
-		else
-			-- Nests unlock in order, so this one comes with the next level that has enough nests.
-			setLockLabel(nest, "🔒 Upgrade pen")
-			prompt.Enabled = false
-		end
-		return
-	end
-	setLockLabel(nest, nil)
-	local left = nest.Egg.ReadyAt - os.time()
-	if nest.Timer then
-		nest.Timer.Text = left > 0 and ("Egg " .. formatTime(left)) or "Ready to hatch!"
-	end
-	if left > 0 then
-		prompt.Enabled = false
-	else
-		prompt.ActionText = "Hatch"
-		prompt.ObjectText = EggConfig.Eggs[nest.Egg.EggId].DisplayName
-		prompt.Enabled = true
-	end
-end
-
-local function nearNest(player, nest)
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	return root and (root.Position - nest.Part.Position).Magnitude <= S.PenPromptDistance + 6
-end
-
--- Name / rarity / weight label floating over a shown pet.
-local function petLabel(adornee, pet, height, color)
-	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(200, 50)
-	gui.StudsOffset = Vector3.new(0, height, 0)
-	gui.LightInfluence = 0
-	gui.Adornee = adornee
-	gui.Parent = adornee
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.RichText = true
-	label.TextScaled = true
-	label.Font = Enum.Font.FredokaOne
-	label.TextColor3 = color
-	label.TextStrokeTransparency = 0.2
-	label.Text = string.format("<b>%s</b>\n%s · %.2f kg", pet.Name, pet.Rarity, pet.Weight)
-	label.Parent = gui
-end
-
--- The hatched animal hops out on the nest, looks around for a few seconds,
--- then goes away (into the inventory). Old pets with no model get a glowing ball.
-local function showPet(nest, pet)
-	local color = EggConfig.RarityColors[pet.Rarity] or Color3.new(1, 1, 1)
-	local spec = Animals.GetSpec(pet.Name)
-	if spec then
-		local height = math.clamp(3 + (pet.Weight or 1) * 0.12, 3, 7)
-		local rig = Animals.Build(pet.Name, { Parent = nest.Part, Scale = height / (spec.Scale or 3) })
-		local base = eggBase(nest)
-		local heading = math.atan2(base.LookVector.X, base.LookVector.Z)
-		local t = 0
-		rig:Step(0, "idle", 0, base.Position, heading)
-		local sparkles = Instance.new("Sparkles")
-		sparkles.SparkleColor = color
-		sparkles.Parent = rig.Model.PrimaryPart
-		petLabel(rig.Model.PrimaryPart, pet, height + 1.5, color)
-		local conn
-		conn = RunService.Heartbeat:Connect(function(dt)
-			t += dt
-			local hop = if t < 0.6 then math.sin(t / 0.6 * math.pi) * 3 else 0
-			rig:Step(dt, if t < 0.6 then "walk" else "idle", if t < 0.6 then 6 else 0, base.Position + Vector3.new(0, hop, 0), heading + math.sin(t * 0.8) * 0.6)
-		end)
-		task.delay(S.PetShowSeconds, function()
-			conn:Disconnect()
-			rig:Destroy()
-		end)
-		return
-	end
-
-	local ball = Instance.new("Part")
-	ball.Name = "HatchedPet"
-	ball.Shape = Enum.PartType.Ball
-	ball.Size = Vector3.one * math.clamp(2 + pet.Weight * 0.15, 2, 8)
-	ball.Material = Enum.Material.Neon
-	ball.Color = EggConfig.RarityColors[pet.Rarity] or Color3.new(1, 1, 1)
-	ball.Anchored = true
-	ball.CanCollide = false
-	ball.CFrame = eggBase(nest) * CFrame.new(0, ball.Size.Y / 2 + 1, 0)
-
-	local sparkles = Instance.new("Sparkles")
-	sparkles.SparkleColor = ball.Color
-	sparkles.Parent = ball
-	petLabel(ball, pet, ball.Size.Y / 2 + 1.5, ball.Color)
-
-	ball.Parent = nest.Part
-	task.delay(S.PetShowSeconds, function()
-		ball:Destroy()
-	end)
-end
-
-local function placeEgg(player, plot, nest)
-	if nest.Egg or not nearNest(player, nest) then
-		return
-	end
-	if not EggCarry.IsCarrying(player) then
-		notify(player, "Info", { Text = "Bring an egg here to grow it." })
-		return
-	end
-	if not nest.Unlocked then
-		notify(player, "Info", { Text = "Upgrade your pen to use this nest." })
-		return
-	end
-	local data = EggSave.WaitForData(player)
-	if not data or plot.Owner ~= player or nest.Egg then
-		return
-	end
-	local egg = EggCarry.TakeCarried(player)
-	if not egg then
-		return
-	end
-	local def = EggConfig.Eggs[egg.EggId]
-	egg.ReadyAt = os.time() + math.floor(def.GrowSeconds + def.GrowSecondsPerKg * egg.Kg)
-	nest.Egg = egg
-	data.Eggs.Pens[nest.Key] = egg
-	EggSave.MarkDirty(player)
-	showVisual(nest)
-	refreshNest(nest)
-	local info = EggFactory.Info(egg)
-	info.ReadyAt = egg.ReadyAt
-	notify(player, "EggPlaced", info)
-end
-
-local function hatchEgg(player, plot, nest)
-	local egg = nest.Egg
-	if not egg or os.time() < egg.ReadyAt or not nearNest(player, nest) then
-		return
-	end
-	local data = EggSave.WaitForData(player)
-	if not data or plot.Owner ~= player or nest.Egg ~= egg then
-		return
-	end
-	-- Clear the pen before anything else so it can't hatch twice.
-	nest.Egg = nil
-	data.Eggs.Pens[nest.Key] = nil
-	clearVisual(nest)
-	refreshNest(nest)
-
-	local pet = Hatching.Roll(egg)
-	pet.Id = EggSave.AddPet(player, pet)
-	EggSave.MarkDirty(player)
-	showPet(nest, pet)
-	notify(player, "Hatched", { Pet = pet, EggId = egg.EggId, Name = EggConfig.Eggs[egg.EggId].DisplayName })
-end
-
-local function makePrompt(player, plot, nest)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "PenPrompt"
+	prompt.ActionText = "Hatch"
+	prompt.ObjectText = EggConfig.Eggs[data.EggId] and EggConfig.Eggs[data.EggId].DisplayName or "Egg"
 	prompt.MaxActivationDistance = S.PenPromptDistance
 	prompt.HoldDuration = 0.3
 	prompt.RequiresLineOfSight = false
 	-- The client script hides this prompt for everyone but the owner.
-	prompt:SetAttribute("OwnerUserId", player.UserId)
+	prompt:SetAttribute("OwnerUserId", plot.Owner and plot.Owner.UserId or 0)
 	prompt.Triggered:Connect(function(who)
-		if who ~= plot.Owner then
-			return
-		end
-		if nest.Egg then
-			hatchEgg(who, plot, nest)
-		else
-			placeEgg(who, plot, nest)
+		if who == plot.Owner then
+			hatchEgg(who, plot, slot)
 		end
 	end)
-	prompt.Parent = nest.Part
-	nest.Prompt = prompt
+	prompt.Parent = part
+
+	part.Parent = plot.Model:FindFirstChild("Pen") or plot.Model
+	slot.Visual, slot.Timer, slot.Prompt = part, label, prompt
+	refreshSlot(slot)
 end
 
-local EMPTY_SIGN_TEXT = "Empty Plot"
+local function nearSlot(player, slot)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return root and slot.Visual and (root.Position - slot.Visual.Position).Magnitude <= S.PenPromptDistance + 6
+end
 
--- Writes the owner's name on the plot sign (nil = free plot). Uses the sign's
--- own SurfaceGui text if it has one, otherwise floats a label above it.
-local function setSign(plot, text)
-	local sign = plot.Model:FindFirstChild("Sign", true)
-	if sign and not sign:IsA("BasePart") then
-		sign = sign:FindFirstChildWhichIsA("BasePart", true)
-	end
-	sign = sign or plot.Model.PrimaryPart
-	if not sign then
+function hatchEgg(player, plot, slot)
+	local egg = slot.Egg
+	if not egg or os.time() < egg.ReadyAt or not nearSlot(player, slot) then
 		return
 	end
+	local data = EggSave.WaitForData(player)
+	if not data or plot.Owner ~= player or plot.Eggs[slot.Key] ~= slot then
+		return
+	end
+	-- Clear it before anything else so it can't hatch twice.
+	plot.Eggs[slot.Key] = nil
+	data.Eggs.Pens[slot.Key] = nil
+	clearVisual(slot)
 
-	local surfaceText = nil
-	for _, d in sign:GetDescendants() do
-		if (d:IsA("TextLabel") or d:IsA("TextBox")) and d:FindFirstAncestorWhichIsA("SurfaceGui") then
-			surfaceText = d
-			break
+	local pet = Hatching.Roll(egg)
+	pet.Id = EggSave.AddPet(player, pet)
+	-- New pets go straight into the pen while it has room.
+	local saved = pet.Id and data.Pets[pet.Id]
+	local inPen = false
+	if saved and #equippedPets(data) < PlayerConfig.MaxEquippedPets then
+		saved.Equipped = true
+		inPen = true
+		plot.Model:SetAttribute("LastHatch", HttpService:JSONEncode({ Id = pet.Id, X = egg.Spot.X, Z = egg.Spot.Z }))
+	end
+	EggSave.MarkDirty(player)
+	publishPets(plot)
+	notify(player, "Hatched", { Pet = pet, EggId = egg.EggId, Name = EggConfig.Eggs[egg.EggId].DisplayName })
+	if not inPen then
+		task.delay(6, function()
+			notify(player, "Info", {
+				Text = `Your pen is full ({PlayerConfig.MaxEquippedPets} pets). Unequip a pet in your inventory to put {pet.Name} in.`,
+			})
+		end)
+	end
+end
+
+-- Place Egg (the Drop Egg button inside your own pen). Returns "notInPen"
+-- when the player isn't standing in their own pen (then the egg just drops),
+-- true when placed, or false + a reason.
+function PenService.PlaceHere(player)
+	local plot = playerPlot[player]
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not plot or not plot.Floor or not root then
+		return "notInPen"
+	end
+	local spot = floorSpot(plot, root.Position)
+	local height = plot.Floor.CFrame:PointToObjectSpace(root.Position).Y
+	if not insideFloor(plot, spot, 0) or height > 12 then
+		return "notInPen"
+	end
+	if not EggCarry.IsCarrying(player) then
+		return false, "You're not carrying an egg."
+	end
+	if not insideFloor(plot, spot, EDGE) then
+		return false, "Move away from the fence a bit."
+	end
+	if eggCount(plot) >= MAX_EGGS then
+		return false, `Your pen holds {MAX_EGGS} eggs. Hatch one first.`
+	end
+	for _, slot in plot.Eggs do
+		local s = slot.Egg.Spot
+		if (Vector2.new(s.X, s.Z) - spot).Magnitude < EGG_GAP then
+			return false, "Too close to another egg."
 		end
 	end
-	if surfaceText then
-		surfaceText.Text = text or EMPTY_SIGN_TEXT
-		return
+	local data = EggSave.WaitForData(player)
+	if not data or plot.Owner ~= player then
+		return false, "Still loading."
 	end
+	local egg = EggCarry.TakeCarried(player)
+	if not egg then
+		return false, "You're not carrying an egg."
+	end
+	local def = EggConfig.Eggs[egg.EggId]
+	egg.ReadyAt = os.time() + math.floor(def.GrowSeconds + def.GrowSecondsPerKg * egg.Kg)
+	egg.Spot = { X = spot.X, Z = spot.Y }
+	local slot = { Key = egg.Uid or HttpService:GenerateGUID(false), Egg = egg }
+	plot.Eggs[slot.Key] = slot
+	data.Eggs.Pens[slot.Key] = egg
+	EggSave.MarkDirty(player)
+	showVisual(plot, slot)
+	local info = EggFactory.Info(egg)
+	info.ReadyAt = egg.ReadyAt
+	notify(player, "EggPlaced", info)
+	return true
+end
 
-	local old = sign:FindFirstChild("OwnerLabel")
-	if old then
-		old:Destroy()
+-- Admin: every egg in the player's pen is ready to hatch now.
+function PenService.ReadyAll(player)
+	local plot = playerPlot[player]
+	if not plot then
+		return 0
 	end
-	if not text then
-		return
+	local now, n = os.time(), 0
+	for _, slot in plot.Eggs do
+		slot.Egg.ReadyAt = now
+		if slot.Visual then
+			slot.Visual:SetAttribute("ReadyAt", now)
+		end
+		refreshSlot(slot)
+		n += 1
 	end
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "OwnerLabel"
-	gui.Size = UDim2.fromOffset(220, 40)
-	gui.StudsOffset = Vector3.new(0, sign.Size.Y / 2 + 2, 0)
-	gui.LightInfluence = 0
-	gui.Parent = sign
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.TextScaled = true
-	label.Font = Enum.Font.FredokaOne
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeTransparency = 0.2
-	label.Text = text
-	label.Parent = gui
+	EggSave.MarkDirty(player)
+	return n
 end
 
 -- Pen upgrades ---------------------------------------------------------------
@@ -553,12 +477,6 @@ end
 local function applyLevel(plot, level)
 	plot.Level = level
 	local multiplier = EggConfig.PenLevels[level].CashMultiplier
-	for _, nest in plot.Nests do
-		nest.Unlocked = true
-		setShell(plot, nest)
-		setSlotUnlocked(nest, nest.Unlocked)
-		refreshNest(nest)
-	end
 
 	local pen = plot.Model:FindFirstChild("Pen")
 	if pen then
@@ -568,6 +486,7 @@ local function applyLevel(plot, level)
 	if plot.Owner then
 		plot.Owner:SetAttribute("PenLevel", level)
 		plot.Owner:SetAttribute("CashMultiplier", multiplier)
+		publishPets(plot)
 	end
 
 	local board = plot.UpgradeBoard
@@ -694,54 +613,44 @@ local function assignPlot(player)
 		return
 	end
 
-	-- Re-read the nests in case the map changed since the server started.
-	plot.Nests = findNests(plot.Model)
+	plot.Floor = findFloor(plot.Model)
 	plot.Owner = player
+	plot.Eggs = {}
+	plot.SignText = nil
 	playerPlot[player] = plot
 	plot.Model:SetAttribute("OwnerUserId", player.UserId)
 	plot.Model:SetAttribute("OwnerName", player.DisplayName)
 	player:SetAttribute("PlotName", plot.Model.Name)
 	setSign(plot, player.DisplayName .. "'s Pen")
-	notify(player, "Info", { Text = `You claimed {plot.Model.Name}! Bring eggs to your pen.` })
-	if #plot.Nests == 0 then
-		warn(`[Eggs] {plot.Model:GetFullName()} has no parts named "Nest", so eggs can't be placed there.`)
+	notify(player, "Info", { Text = `You claimed {plot.Model.Name}! Bring eggs into your pen.` })
+	if not plot.Floor then
+		warn(`[Eggs] {plot.Model:GetFullName()} has no Pen.Floor part, so eggs can't be placed there.`)
 	end
 
-	-- Put saved eggs back in their nests. Eggs whose nest no longer exists
-	-- (map changed) move to any empty nest; if none, they stay saved.
-	local saved = data.Eggs.Pens
-	local homeless = {}
-	local byKey = {}
-	for _, nest in plot.Nests do
-		byKey[nest.Key] = nest
-	end
-	for key, egg in saved do
-		local nest = byKey[key]
-		if nest then
-			nest.Egg = egg
-		elseif EggConfig.Eggs[egg.EggId] then
-			table.insert(homeless, key)
+	-- Put saved eggs back. Old eggs from the nest days (no Spot, or a spot off
+	-- the floor) get a free spot on a grid.
+	if plot.Floor then
+		local keys = {}
+		for key in data.Eggs.Pens do
+			table.insert(keys, key)
 		end
-	end
-	for _, key in homeless do
-		for _, nest in plot.Nests do
-			if not nest.Egg then
-				nest.Egg = saved[key]
-				saved[nest.Key] = saved[key]
-				saved[key] = nil
-				break
+		table.sort(keys)
+		for _, key in keys do
+			local egg = data.Eggs.Pens[key]
+			if type(egg) == "table" and EggConfig.Eggs[egg.EggId] then
+				local s = egg.Spot
+				if type(s) ~= "table" or type(s.X) ~= "number" or not insideFloor(plot, Vector2.new(s.X, s.Z or 0), 0) then
+					egg.Spot = defaultSpot(plot)
+				end
+				local slot = { Key = key, Egg = egg }
+				plot.Eggs[key] = slot
+				showVisual(plot, slot)
 			end
-		end
-	end
-
-	for _, nest in plot.Nests do
-		makePrompt(player, plot, nest)
-		if nest.Egg then
-			showVisual(nest)
 		end
 	end
 	setupUpgradeSign(player, plot)
 	applyLevel(plot, getPenLevel(data))
+	publishPets(plot)
 
 	-- Start (and respawn) at your own pen.
 	plot.SpawnConnection = player.CharacterAdded:Connect(function(character)
@@ -766,6 +675,10 @@ local function releasePlot(player)
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.Model:SetAttribute("OwnerName", nil)
 	plot.Model:SetAttribute("PenLevel", nil)
+	plot.Model:SetAttribute("PenPets", "[]")
+	plot.Model:SetAttribute("PenIncome", 0)
+	plot.Model:SetAttribute("LastHatch", nil)
+	plot.SignText = nil
 	player:SetAttribute("CashMultiplier", nil)
 	local pen = plot.Model:FindFirstChild("Pen")
 	if pen then
@@ -773,21 +686,12 @@ local function releasePlot(player)
 	end
 	setSign(plot, nil)
 	clearUpgradeSign(plot)
-	for _, nest in plot.Nests do
-		clearVisual(nest)
-		setLockLabel(nest, nil)
-		if nest.Prompt then
-			nest.Prompt:Destroy()
-			nest.Prompt = nil
-		end
-		nest.Egg = nil
-		nest.Unlocked = false
-		setShell(plot, nest)
-		setSlotUnlocked(nest, not nest.IsSpot)
+	for _, slot in plot.Eggs do
+		clearVisual(slot)
 	end
+	plot.Eggs = {}
 end
 
--- The plot a player owns, or nil.
 -- Sends the player to their plot's entrance. Returns false if they have no plot.
 function PenService.SendHome(player)
 	local plot = playerPlot[player]
@@ -798,12 +702,13 @@ function PenService.SendHome(player)
 	return true
 end
 
+-- The plot a player owns, or nil.
 function PenService.GetPlot(player)
 	local plot = playerPlot[player]
 	return plot and plot.Model
 end
 
--- Seconds left on each of the player's pens, for a pen timer UI.
+-- Seconds left on each egg in the player's pen, for a pen timer UI.
 -- Returns { { Key, EggId, Name, ReadyAt, SecondsLeft } }
 function PenService.GetPenEggs(player)
 	local result = {}
@@ -811,16 +716,14 @@ function PenService.GetPenEggs(player)
 	if not plot then
 		return result
 	end
-	for _, nest in plot.Nests do
-		if nest.Egg then
-			table.insert(result, {
-				Key = nest.Key,
-				EggId = nest.Egg.EggId,
-				Name = EggConfig.Eggs[nest.Egg.EggId].DisplayName,
-				ReadyAt = nest.Egg.ReadyAt,
-				SecondsLeft = math.max(0, nest.Egg.ReadyAt - os.time()),
-			})
-		end
+	for key, slot in plot.Eggs do
+		table.insert(result, {
+			Key = key,
+			EggId = slot.Egg.EggId,
+			Name = EggConfig.Eggs[slot.Egg.EggId].DisplayName,
+			ReadyAt = slot.Egg.ReadyAt,
+			SecondsLeft = math.max(0, slot.Egg.ReadyAt - os.time()),
+		})
 	end
 	return result
 end
@@ -846,16 +749,31 @@ function PenService.Start()
 		EggSave.Forget(player)
 	end)
 
-	-- Countdown labels and "ready" prompts.
+	-- InOwnPen (turns the Drop Egg button into Place Egg) four times a second;
+	-- countdowns, ready prompts and pen pets every second.
 	task.spawn(function()
+		local tick = 0
 		while true do
-			task.wait(1)
+			task.wait(0.25)
+			tick += 1
 			for _, plot in plots do
-				if plot.Owner then
-					for _, nest in plot.Nests do
-						if nest.Egg then
-							refreshNest(nest)
+				local owner = plot.Owner
+				if owner and plot.Floor then
+					local character = owner.Character
+					local root = character and character:FindFirstChild("HumanoidRootPart")
+					local inPen = false
+					if root then
+						local height = plot.Floor.CFrame:PointToObjectSpace(root.Position).Y
+						inPen = height < 12 and insideFloor(plot, floorSpot(plot, root.Position), 0)
+					end
+					if owner:GetAttribute("InOwnPen") ~= inPen then
+						owner:SetAttribute("InOwnPen", inPen)
+					end
+					if tick % 4 == 0 then
+						for _, slot in plot.Eggs do
+							refreshSlot(slot)
 						end
+						publishPets(plot)
 					end
 				end
 			end

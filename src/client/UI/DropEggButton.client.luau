@@ -1,6 +1,7 @@
 -- Drop Egg button: shows while you carry an egg and puts it down on the ground
--- under you (server: Player/DropEgg). PC: above Jump Boost in the bottom right,
--- or press G. Phones: on the right side above the jump controls.
+-- under you (server: Player/DropEgg). Inside your own pen it turns into a green
+-- "Place Egg" button that sets the egg in the pen to grow. PC: above Jump Boost
+-- in the bottom right, or press G. Phones: on the right side above the jump controls.
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -20,7 +21,7 @@ gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
-local button = Bubbly.Button({
+local button, buttonLabel = Bubbly.Button({
 	Name = "DropEgg",
 	Text = "Drop Egg",
 	Parent = gui,
@@ -48,8 +49,15 @@ local function layout()
 	end
 end
 
+local inPen = nil
 local function refresh()
 	button.Visible = player:GetAttribute("CarryingEgg") ~= nil
+	local nowInPen = player:GetAttribute("InOwnPen") == true
+	if nowInPen ~= inPen then
+		inPen = nowInPen
+		buttonLabel.Text = if inPen then "Place Egg" else "Drop Egg"
+		Bubbly.SetColors(button, if inPen then Bubbly.Colors.Mint else Bubbly.Colors.Red)
+	end
 	layout()
 end
 
@@ -68,6 +76,7 @@ ContextActionService:BindAction("DropEgg", function(_, state)
 end, false, Enum.KeyCode.G)
 
 player:GetAttributeChangedSignal("CarryingEgg"):Connect(refresh)
+player:GetAttributeChangedSignal("InOwnPen"):Connect(refresh)
 playerGui.ChildAdded:Connect(function(child)
 	if child.Name == "TouchGui" then
 		task.defer(refresh)

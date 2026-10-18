@@ -234,7 +234,8 @@ buttonRow(dayNightCard, rowY(1), {
 })
 
 -- Eggs card: pick any animal's egg with the arrows and get it in your hands,
--- or play its hatch animation right away (only on your screen, nothing saved).
+-- play its hatch animation right away (only on your screen, nothing saved),
+-- or make every egg in your pen ready to hatch.
 local eggCard = card("EggCard", "Eggs", dayNightY + dayNightHeight + GAP, 2)
 local eggIndex = 1
 local eggName = Components.Label({
@@ -307,6 +308,7 @@ buttonRow(eggCard, rowY(2), {
 			Pet = { Name = pet.Name, Rarity = pet.Rarity, Weight = math.floor(egg.KgMin * (pet.SizeMul or 1) * 100) / 100 },
 		})
 	end },
+	{ "Ready Eggs", Theme.Colors.Orange, function() run("ReadyEggs", 0) end },
 })
 showEgg()
 

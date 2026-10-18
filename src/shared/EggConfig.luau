@@ -55,7 +55,9 @@ EggConfig.Settings = {
 
 	-- Pens
 	PenPromptDistance = 10,
-	PetShowSeconds = 6, -- how long the hatched pet stands in the pen
+	MaxPenEggs = 6, -- eggs growing in one pen at once (placed anywhere on the floor)
+	PenEdgeMargin = 3, -- studs eggs must stay inside the fence
+	PenEggSpacing = 4, -- studs between two eggs in a pen
 }
 
 -- Pen upgrade levels. CashMultiplier multiplies all money you earn (pet
