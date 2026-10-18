@@ -332,6 +332,7 @@ buttonRow(eggCard, rowY(2), {
 	end },
 	{ "Ready Eggs", Theme.Colors.Orange, function() run("ReadyEggs", 0) end },
 	{ "Crack Egg", Theme.Colors.Red, function() run("CrackEgg", 0) end },
+	{ "Egg Lineup", Theme.Colors.Sky, function() run("EggLineup", 0) end },
 })
 showEgg()
 

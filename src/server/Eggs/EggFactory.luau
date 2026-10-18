@@ -9,6 +9,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
+local EggLooks = require(ReplicatedStorage.Shared.EggLooks)
 
 local S = EggConfig.Settings
 local CRACKED_TINT = Color3.fromRGB(70, 50, 35)
@@ -60,20 +61,24 @@ end
 function EggFactory.Build(data)
 	local egg = EggConfig.Eggs[data.EggId]
 
-	local part = Instance.new("Part")
+	-- The egg's own design (Shared.EggLooks): the shell Part with its decorations
+	-- welded on. Eggs without one (Legacy) are a plain coloured sphere.
+	local part = EggLooks.Build(data.EggId, EggFactory.SizeFor(data))
+	if not part then
+		part = Instance.new("Part")
+		part.Size = EggFactory.SizeFor(data)
+		part.Material = Enum.Material.SmoothPlastic
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = part
+	end
 	part.Name = "Egg"
-	part.Size = EggFactory.SizeFor(data)
-	part.Material = Enum.Material.SmoothPlastic
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.CanCollide = false
 	part:SetAttribute("EggUid", data.Uid)
 	part:SetAttribute("EggId", data.EggId)
 	part:SetAttribute("Kg", data.Kg)
-
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Sphere
-	mesh.Parent = part
 
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "EggLabel"
@@ -140,11 +145,17 @@ function EggFactory.PopText(position, text, color)
 	end)
 end
 
+-- The egg's shell colour: its design's shell, or its EggConfig colour.
+function EggFactory.ShellColor(eggId)
+	local egg = EggConfig.Eggs[eggId]
+	return EggLooks.ShellColor(eggId) or (egg and egg.Color) or Color3.fromRGB(255, 240, 210)
+end
+
 -- Updates color and label after cracks change.
 function EggFactory.Refresh(part, data)
 	local egg = EggConfig.Eggs[data.EggId]
 	local damage = math.min(data.Cracks / S.MaxCracks, 1)
-	part.Color = egg.Color:Lerp(CRACKED_TINT, damage * 0.6)
+	part.Color = EggFactory.ShellColor(data.EggId):Lerp(CRACKED_TINT, damage * 0.6)
 	part:SetAttribute("Cracks", data.Cracks)
 	local gui = part:FindFirstChild("EggLabel")
 	if gui then

@@ -16,6 +16,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EggConfig = require(Shared:WaitForChild("EggConfig"))
 local EggRemotes = require(Shared:WaitForChild("EggRemotes"))
 local Animals = require(Shared:WaitForChild("Animals"))
+local EggLooks = require(Shared:WaitForChild("EggLooks"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
 local Icons = require(script.Parent:WaitForChild("Icons"))
@@ -189,48 +190,67 @@ local function play(info)
 		Parent = world,
 	})
 
-	-- The egg: a smooth ellipsoid with lighter spots, as one model.
+	-- The egg: its own design (Shared.EggLooks) if it has one, else a smooth
+	-- ellipsoid with lighter spots. One model; placeEgg moves every part.
 	local egg = Instance.new("Model")
 	egg.Name = "Egg"
-	local shell = smoothPart({ Name = "Shell", Size = EGG_SIZE, Color = eggColor, CFrame = CFrame.new(0, EGG_SIZE.Y / 2, 0) })
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Sphere
-	mesh.Parent = shell
+	local eggBase = CFrame.new(0, EGG_SIZE.Y / 2, 0)
+	local shell = EggLooks.Build(info.EggId, EGG_SIZE, { Loose = true, Effects = false })
+	local spotColor
+	if shell then
+		shell.Name = "Shell"
+		shell.Anchored = true
+		shell.CanQuery = false
+		shell.CanTouch = false
+		eggColor = shell.Color
+		local first = shell:FindFirstChildWhichIsA("BasePart")
+		spotColor = if first then first.Color else eggColor:Lerp(WHITE, 0.6)
+		for _, p in shell:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Parent = egg
+			end
+		end
+	else
+		shell = smoothPart({ Name = "Shell", Size = EGG_SIZE, Color = eggColor, CFrame = eggBase })
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = shell
+		spotColor = eggColor:Lerp(WHITE, 0.6)
+		if (eggColor.R + eggColor.G + eggColor.B) / 3 > 0.8 then
+			spotColor = eggColor:Lerp(rarityColor, 0.55) -- white eggs get rarity-tinted spots
+		end
+		for _, s in { { 0.4, 0.5, 1.3 }, { 2.3, 0.1, 1.1 }, { 4.1, 0.65, 1.2 }, { 5.3, -0.25, 0.9 }, { 1.2, -0.45, 1 }, { 3.2, -0.6, 0.8 } } do
+			local point, normal = eggSurface(s[1], s[2])
+			local spot = smoothPart({
+				Name = "Spot",
+				Size = Vector3.new(s[3], s[3], 0.35),
+				Color = spotColor,
+				CFrame = CFrame.lookAt(shell.Position + point - normal * 0.12, shell.Position + point + normal),
+			})
+			local m = Instance.new("SpecialMesh")
+			m.MeshType = Enum.MeshType.Sphere
+			m.Parent = spot
+			spot.Parent = egg
+		end
+	end
 	shell.Parent = egg
 	egg.PrimaryPart = shell
-	local spotColor = eggColor:Lerp(WHITE, 0.6)
-	if (eggColor.R + eggColor.G + eggColor.B) / 3 > 0.8 then
-		spotColor = eggColor:Lerp(rarityColor, 0.55) -- white eggs get rarity-tinted spots
-	end
-	for _, s in { { 0.4, 0.5, 1.3 }, { 2.3, 0.1, 1.1 }, { 4.1, 0.65, 1.2 }, { 5.3, -0.25, 0.9 }, { 1.2, -0.45, 1 }, { 3.2, -0.6, 0.8 } } do
-		local point, normal = eggSurface(s[1], s[2])
-		local spot = smoothPart({
-			Name = "Spot",
-			Size = Vector3.new(s[3], s[3], 0.35),
-			Color = spotColor,
-			CFrame = CFrame.lookAt(shell.Position + point - normal * 0.12, shell.Position + point + normal),
-		})
-		local m = Instance.new("SpecialMesh")
-		m.MeshType = Enum.MeshType.Sphere
-		m.Parent = spot
-		spot.Parent = egg
-	end
-	egg.Parent = world
 	local eggOffsets = {}
 	for _, p in egg:GetChildren() do
 		if p:IsA("BasePart") then
-			eggOffsets[p] = { Offset = shell.CFrame:ToObjectSpace(p.CFrame), Color = p.Color }
+			eggOffsets[p] = { Offset = shell.CFrame:ToObjectSpace(p.CFrame), Color = p.Color, Size = p.Size }
 		end
 	end
-	local eggBase = CFrame.new(0, EGG_SIZE.Y / 2, 0)
 	local function placeEgg(cf: CFrame, scale: number?)
 		scale = scale or 1
 		for p, o in eggOffsets do
 			local off = o.Offset
 			p.CFrame = cf * CFrame.new(off.Position * scale) * off.Rotation
+			p.Size = o.Size * scale
 		end
-		shell.Size = EGG_SIZE * scale
 	end
+	placeEgg(eggBase)
+	egg.Parent = world
 	local function tintEgg(amount: number)
 		for p, o in eggOffsets do
 			p.Color = o.Color:Lerp(WHITE, amount)
@@ -281,7 +301,7 @@ local function play(info)
 			})
 			-- offset from the egg's centre, like the spots
 			local offset = CFrame.lookAt(point + normal * 0.02, point + normal * 2) * CFrame.Angles(0, 0, (if k % 2 == 0 then 0.7 else -0.7))
-			eggOffsets[line] = { Offset = offset, Color = line.Color }
+			eggOffsets[line] = { Offset = offset, Color = line.Color, Size = line.Size }
 			line.Parent = egg
 		end
 	end

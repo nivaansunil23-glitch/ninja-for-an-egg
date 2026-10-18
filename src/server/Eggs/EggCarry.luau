@@ -341,7 +341,7 @@ local function fallOutOfHands(player, data, from, broken)
 	if not hit or hit.Position.Y < top.Y - 60 then
 		-- Nothing under it: it's gone over the edge.
 		display:Destroy()
-		EggFactory.BreakEffect(top, egg.Color)
+		EggFactory.BreakEffect(top, EggFactory.ShellColor(data.EggId))
 		notify(player, "EggBroke", EggFactory.Info(data))
 		return
 	end
@@ -363,12 +363,12 @@ local function fallOutOfHands(player, data, from, broken)
 	-- 3. Hits the floor: smashes, or cracks right there.
 	display:Destroy()
 	if broken then
-		EggFactory.BreakEffect(landAt, egg.Color, 14)
+		EggFactory.BreakEffect(landAt, EggFactory.ShellColor(data.EggId), 14)
 		EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "SMASH!", Color3.fromRGB(255, 80, 80))
 		notify(player, "EggBroke", EggFactory.Info(data))
 		return
 	end
-	EggFactory.BreakEffect(landAt, egg.Color, 4)
+	EggFactory.BreakEffect(landAt, EggFactory.ShellColor(data.EggId), 4)
 	EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "CRACK!", Color3.fromRGB(255, 220, 90))
 	EggCarry.SpawnWorldEgg(data, CFrame.new(landXZ.X, ground.Y, landXZ.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), {
 		Lifetime = S.DroppedEggLifetime,

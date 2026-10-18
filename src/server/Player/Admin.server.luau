@@ -11,6 +11,7 @@
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 --   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
 --   "CrackEgg"   cracks the egg you're carrying (knocks you down, egg falls out)
+--   "EggLineup"  every island egg in rows in front of you (one row per island) for LINEUP_SECONDS
 --   "AllGear" / "NoGear"   own every shoe and coil tier / none (amount = tier to keep, 0 = none)
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
@@ -34,6 +35,63 @@ local GearShop = require(Server:WaitForChild("Shops"):WaitForChild("GearShop"))
 local EggConfig = require(Shared:WaitForChild("EggConfig"))
 
 local MAX_MONEY_PER_CLICK = 1e12
+local LINEUP_SECONDS = 25
+local LINEUP_KG = 5
+
+-- Every island egg built by EggFactory (so it looks exactly like in the game),
+-- in front of the player: one row per island, the front of each egg facing them.
+local function eggLineup(player: Player)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return false, "No character"
+	end
+	local old = workspace:FindFirstChild("AdminEggLineup")
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "AdminEggLineup"
+	local flat = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+	local forward = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, -1)
+	local right = forward:Cross(Vector3.yAxis)
+	local feet = root.Position - Vector3.new(0, 3, 0)
+	local count, plain = 0, {}
+	for row, island in EggConfig.Islands do
+		local n = #island.Animals
+		for col, animal in island.Animals do
+			local eggId = EggConfig.EggIdFor(animal.Name)
+			local ok, part = pcall(EggFactory.Build, EggFactory.NewData(eggId, LINEUP_KG))
+			if ok then
+				local pos = feet + forward * (10 + (row - 1) * 6) + right * ((col - (n + 1) / 2) * 5.5)
+				pos += Vector3.new(0, part.Size.Y / 2, 0)
+				part.Anchored = true
+				part.CanQuery = false
+				part.CanTouch = false
+				part.CFrame = CFrame.lookAt(pos, pos + forward) -- +Z (the design's front) faces the player
+				part.Parent = folder
+				count += 1
+				if not part:FindFirstChildWhichIsA("BasePart") then
+					table.insert(plain, eggId)
+				end
+			else
+				warn(`[Admin] EggLineup: {eggId} failed: {part}`)
+				table.insert(plain, eggId .. " (error)")
+			end
+		end
+	end
+	folder.Parent = workspace
+	task.delay(LINEUP_SECONDS, function()
+		if folder.Parent then
+			folder:Destroy()
+		end
+	end)
+	if #plain > 0 then
+		warn("[Admin] EggLineup: no design for " .. table.concat(plain, ", "))
+		return true, `{count} eggs, {#plain} without a design (see Output)`
+	end
+	return true, `{count} eggs for {LINEUP_SECONDS}s`
+end
 
 local function isAdmin(player: Player): boolean
 	if RunService:IsStudio() then
@@ -150,6 +208,8 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		end
 		EggCarry.AddCracks(player, 1)
 		return true, "Crack!"
+	elseif action == "EggLineup" then
+		return eggLineup(player)
 	elseif action == "AllGear" then
 		GearShop.SetAll(player, true)
 		return true, "You own every shoe and coil"
