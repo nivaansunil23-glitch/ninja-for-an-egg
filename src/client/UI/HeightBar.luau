@@ -63,9 +63,9 @@ function HeightBar.Build(gui: ScreenGui)
 	holder.Name = "HeightBar"
 	holder.BackgroundTransparency = 1
 	holder.Size = UDim2.fromScale(0.46, 0.13)
-	-- Along the top of the screen (the hotbar has the bottom).
-	holder.Position = UDim2.new(0.5, 0, 0, 6)
-	holder.AnchorPoint = Vector2.new(0.5, 0)
+	-- Bottom middle of the screen (user, 2026-10-19).
+	holder.Position = UDim2.new(0.5, 0, 1, -10)
+	holder.AnchorPoint = Vector2.new(0.5, 1)
 	holder.Parent = gui
 	local limits = Instance.new("UISizeConstraint")
 	limits.MinSize = Vector2.new(300, 70)

@@ -1,7 +1,7 @@
 -- Drop Egg button: shows while you carry an egg and puts it down on the ground
 -- under you (server: Player/DropEgg). Inside your own pen it turns into a green
--- "Place Egg" button that sets the egg in the pen to grow. PC: above Jump Boost
--- in the bottom right, or press G. Phones: on the right side above the jump controls.
+-- "Place Egg" button that sets the egg in the pen to grow. PC: press F (or G),
+-- no button (user, 2026-10-19). Phones: a button on the right above the jump controls.
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -51,7 +51,8 @@ end
 
 local inPen = nil
 local function refresh()
-	button.Visible = player:GetAttribute("CarryingEgg") ~= nil
+	-- keyboards use F, so the button only shows on touch screens
+	button.Visible = player:GetAttribute("CarryingEgg") ~= nil and touchControlsOn()
 	local nowInPen = player:GetAttribute("InOwnPen") == true
 	if nowInPen ~= inPen then
 		inPen = nowInPen
@@ -73,7 +74,7 @@ ContextActionService:BindAction("DropEgg", function(_, state)
 		drop()
 	end
 	return Enum.ContextActionResult.Pass
-end, false, Enum.KeyCode.G)
+end, false, Enum.KeyCode.F, Enum.KeyCode.G)
 
 player:GetAttributeChangedSignal("CarryingEgg"):Connect(refresh)
 player:GetAttributeChangedSignal("InOwnPen"):Connect(refresh)

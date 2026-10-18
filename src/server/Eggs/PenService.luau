@@ -590,7 +590,7 @@ local function setupUpgradeSign(player, plot)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "UpgradePrompt"
 	prompt.MaxActivationDistance = S.PenPromptDistance
-	prompt.HoldDuration = 0.5
+	prompt.HoldDuration = 0
 	prompt.RequiresLineOfSight = false
 	prompt:SetAttribute("OwnerUserId", player.UserId)
 	prompt.Triggered:Connect(function(who)

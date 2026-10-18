@@ -39,9 +39,9 @@ EggConfig.Settings = {
 	-- Carrying and stealing
 	CarryHeight = 2.7, -- studs above HumanoidRootPart where the egg's bottom sits (above the head)
 	PickupDistance = 10,
-	PickupHoldSeconds = 0.3,
+	PickupHoldSeconds = 0, -- one press (only Hatch is held, user 2026-10-19)
 	StealDistance = 8,
-	StealHoldSeconds = 0.6,
+	StealHoldSeconds = 0, -- one press
 	StealCooldownSeconds = 8, -- a thief has to wait this long between steals
 	StealProtectSeconds = 5, -- a freshly grabbed or stolen egg can't be stolen for this long
 	DroppedEggLifetime = 60, -- eggs dropped on death vanish after this many seconds

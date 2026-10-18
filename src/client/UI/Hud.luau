@@ -2,8 +2,8 @@
 --   * left middle: wide Shop and Index buttons (icon + label)
 --   * right middle: square orange Pets button with a pet-count badge
 --   * bottom left: jump power and money in big outlined numbers with icons
---   * the height bar along the top (HeightBar) and the jetpack fuel bar
---   * top middle, under the height bar: Day / Night and a countdown to the next switch
+--   * the height bar along the bottom middle (HeightBar) and the jetpack fuel bar above it
+--   * top middle: Day / Night and a countdown to the next switch
 -- All icons are drawn by Icons (no emoji).
 
 local Players = game:GetService("Players")
@@ -180,7 +180,7 @@ local function buildFuelBar(parent: Instance)
 	holder.Name = "JetpackFuel"
 	holder.BackgroundTransparency = 1
 	holder.Size = UDim2.fromOffset(260, 28)
-	holder.Position = UDim2.new(0.5, 0, 1, -150)
+	holder.Position = UDim2.new(0.5, 0, 1, -160) -- above the height bar
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
 	holder.Visible = false
 	holder.Parent = parent
@@ -238,7 +238,7 @@ local function buildDayNight(parent: Instance)
 		Name = "DayNight",
 		Parent = parent,
 		Size = UDim2.fromOffset(200, 64),
-		Position = UDim2.new(0.5, 0, 0.13, 20), -- just under the height bar
+		Position = UDim2.new(0.5, 0, 0, 10), -- top middle
 		AnchorPoint = Vector2.new(0.5, 0),
 		Colors = Theme.Colors.Navy,
 		CornerRadius = UDim.new(0, 12),
