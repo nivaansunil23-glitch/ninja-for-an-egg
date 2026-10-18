@@ -69,13 +69,6 @@ EggConfig.PenLevels = {
 	{ CashMultiplier = 2.5, Price = 500000 },
 	{ CashMultiplier = 3, Price = 2000000 },
 	{ CashMultiplier = 4, Price = 10000000 },
-},
-	{ Nests = 7, Price = 5000 },
-	{ Nests = 8, Price = 25000 },
-	{ Nests = 9, Price = 100000 },
-	{ Nests = 10, Price = 500000 },
-	{ Nests = 11, Price = 2000000 },
-	{ Nests = 12, Price = 10000000 },
 }
 
 --[[
