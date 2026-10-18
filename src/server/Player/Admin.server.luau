@@ -8,6 +8,7 @@
 --   "AddMoney"   amount = money to add
 --   "ForceDay", "ForceNight", "SkipPhase"   day/night (World/DayNightCycle)
 --   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
+--   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,6 +23,9 @@ local Server = script.Parent.Parent
 local DayNightConfig = require(Shared:WaitForChild("Config"):WaitForChild("DayNightConfig"))
 local DayNightCycle = require(Server:WaitForChild("World"):WaitForChild("DayNightCycle"))
 local EggSpawner = require(Server:WaitForChild("Eggs"):WaitForChild("EggSpawner"))
+local EggCarry = require(Server:WaitForChild("Eggs"):WaitForChild("EggCarry"))
+local EggFactory = require(Server:WaitForChild("Eggs"):WaitForChild("EggFactory"))
+local EggConfig = require(Shared:WaitForChild("EggConfig"))
 
 local MAX_MONEY_PER_CLICK = 1e12
 
@@ -97,6 +101,19 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		EggSpawner.ClearAll()
 		EggSpawner.FillAll()
 		return true, if DayNightConfig.IsNight() then "Eggs cleared (new ones come at day)" else "Eggs reset"
+	elseif action == "GiveEgg" then
+		local eggId = EggConfig.EggOrder[math.floor(amount)]
+		local egg = eggId and EggConfig.Eggs[eggId]
+		if not egg then
+			return false, "No such egg"
+		end
+		if EggCarry.IsCarrying(player) then
+			return false, "Drop your egg first (G)"
+		end
+		if not EggCarry.GiveEgg(player, EggFactory.NewData(eggId, EggFactory.RollKg(egg))) then
+			return false, "Can't carry an egg right now"
+		end
+		return true, "Got a " .. egg.DisplayName
 	end
 	return false, "Unknown action"
 end

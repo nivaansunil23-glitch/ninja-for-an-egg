@@ -1,12 +1,13 @@
 -- Admin panel for the game owner (server checks it: server/Player/Admin).
 -- A small gear button on the right (or press F4) opens a window to give yourself
--- jump levels or money, and to test day/night. Only shows up when the server marks you "IsAdmin".
+-- jump levels or money, test day/night and get any animal's egg. Only shows up when the server marks you "IsAdmin".
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
+local EggConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("EggConfig"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
 local Icons = require(script.Parent:WaitForChild("Icons"))
@@ -32,7 +33,7 @@ local window = Components.Window({
 	Title = "Admin",
 	Icon = "Gear",
 	Parent = gui,
-	Size = UDim2.fromOffset(540, 560),
+	Size = UDim2.fromOffset(540, 680),
 	Colors = Theme.Colors.Purple,
 })
 local content = window.Content
@@ -54,7 +55,7 @@ local function run(action: string, amount: number)
 	end
 end
 
--- Layout (pixels inside the window's content area, which is 504 x 462).
+-- Layout (pixels inside the window's content area, which is 504 x 582).
 local GAP = 12
 local CARD_PAD = 12
 local HEADER_H = 26
@@ -223,13 +224,72 @@ buttonRow(moneyCard, rowY(1), {
 })
 
 -- Day/night card: force a phase, skip to the next one, or reset island eggs.
-local dayNightCard = card("DayNightCard", "Day / Night", moneyY + moneyHeight + GAP, 1)
+local dayNightY = moneyY + moneyHeight + GAP
+local dayNightCard, dayNightHeight = card("DayNightCard", "Day / Night", dayNightY, 1)
 buttonRow(dayNightCard, rowY(1), {
 	{ "Force Day", Theme.Colors.Sky, function() run("ForceDay", 0) end },
 	{ "Force Night", Theme.Colors.Purple, function() run("ForceNight", 0) end },
 	{ "Skip Phase", Theme.Colors.Mint, function() run("SkipPhase", 0) end },
 	{ "Reset Eggs", Theme.Colors.Orange, function() run("ResetEggs", 0) end },
 })
+
+-- Eggs card: pick any animal's egg with the arrows and get it in your hands.
+local eggCard = card("EggCard", "Eggs", dayNightY + dayNightHeight + GAP, 1)
+local eggIndex = 1
+local eggName = Components.Label({
+	Name = "EggName",
+	Text = "",
+	Parent = eggCard,
+	Size = UDim2.new(1, -(2 * CARD_PAD + 2 * 56 + 160 + 30), 0, ROW_H),
+	Position = UDim2.fromOffset(CARD_PAD + 56 + 10, rowY(1)),
+	Wrapped = true,
+	StrokeThickness = 2.5,
+	MaxTextSize = 20,
+	ZIndex = 13,
+})
+local function showEgg()
+	local egg = EggConfig.Eggs[EggConfig.EggOrder[eggIndex]]
+	eggName.Text = string.format("%s\n%s · %s", egg.DisplayName, egg.Rarity, egg.Island)
+	eggName.TextColor3 = EggConfig.RarityColors[egg.Rarity] or Theme.Text
+end
+local function stepEgg(by: number)
+	eggIndex = (eggIndex - 1 + by) % #EggConfig.EggOrder + 1
+	showEgg()
+end
+Components.Button({
+	Text = "<",
+	Parent = eggCard,
+	Size = UDim2.fromOffset(56, ROW_H),
+	Position = UDim2.fromOffset(CARD_PAD, rowY(1)),
+	Colors = Theme.Colors.Sky,
+	CornerRadius = UDim.new(0, 14),
+	MaxTextSize = 28,
+	ZIndex = 13,
+	OnClick = function() stepEgg(-1) end,
+})
+Components.Button({
+	Text = ">",
+	Parent = eggCard,
+	Size = UDim2.fromOffset(56, ROW_H),
+	Position = UDim2.new(1, -(CARD_PAD + 160 + 10 + 56), 0, rowY(1)),
+	Colors = Theme.Colors.Sky,
+	CornerRadius = UDim.new(0, 14),
+	MaxTextSize = 28,
+	ZIndex = 13,
+	OnClick = function() stepEgg(1) end,
+})
+Components.Button({
+	Text = "Give Egg",
+	Parent = eggCard,
+	Size = UDim2.fromOffset(160, ROW_H),
+	Position = UDim2.new(1, -(CARD_PAD + 160), 0, rowY(1)),
+	Colors = Theme.Colors.Mint,
+	CornerRadius = UDim.new(0, 14),
+	MaxTextSize = 24,
+	ZIndex = 13,
+	OnClick = function() run("GiveEgg", eggIndex) end,
+})
+showEgg()
 
 -- Small gear button on the right edge, under the HUD's Pets button.
 local adminButton = Components.Button({

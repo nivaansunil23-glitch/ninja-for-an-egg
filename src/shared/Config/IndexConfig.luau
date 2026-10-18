@@ -1,7 +1,7 @@
--- Pet Index areas and rewards. One area per egg, in island order (lowest
--- grow time first = Forest, Beach, Blossom...). Finding every pet of an area
--- lets you claim its reward once: money plus some jump levels.
--- Reward numbers are placeholders until the balance pass.
+-- Pet Index areas and rewards. One area per island (EggConfig.Islands), in
+-- island order, holding that island's animals from most common to rarest.
+-- Finding every pet of an area lets you claim its reward once: money plus
+-- some jump levels. Reward numbers are placeholders until the balance pass.
 
 local EggConfig = require(script.Parent.Parent:WaitForChild("EggConfig"))
 
@@ -11,25 +11,25 @@ IndexConfig.MoneyPerValue = 20 -- reward money = this x the sum of the area's pe
 IndexConfig.JumpLevelsPerArea = 5 -- reward jump levels = this x the area number
 
 IndexConfig.Areas = {}
-for eggId, egg in EggConfig.Eggs do
-	local valueSum = 0
-	for _, pet in egg.Pets do
+for _, island in EggConfig.Islands do
+	local pets, valueSum = {}, 0
+	for _, animal in island.Animals do
+		local egg = EggConfig.Eggs[EggConfig.EggIdFor(animal.Name)]
+		local pet = egg.Pets[1]
+		table.insert(pets, pet)
 		valueSum += pet.Value
 	end
 	table.insert(IndexConfig.Areas, {
-		Id = eggId,
-		Name = (egg.DisplayName:gsub(" Egg$", "")),
-		Color = egg.Color,
-		Pets = egg.Pets,
-		GrowSeconds = egg.GrowSeconds or 0,
+		Id = island.Id,
+		Name = island.Name,
+		Color = island.Color,
+		Pets = pets,
 		ValueSum = valueSum,
+		Number = island.Number,
 	})
 end
 table.sort(IndexConfig.Areas, function(a, b)
-	if a.GrowSeconds ~= b.GrowSeconds then
-		return a.GrowSeconds < b.GrowSeconds
-	end
-	return a.Id < b.Id
+	return a.Number < b.Number
 end)
 for number, area in IndexConfig.Areas do
 	area.Number = number
@@ -37,9 +37,9 @@ for number, area in IndexConfig.Areas do
 	area.RewardJumpLevels = number * IndexConfig.JumpLevelsPerArea
 end
 
-function IndexConfig.GetArea(eggId: string)
+function IndexConfig.GetArea(id: string)
 	for _, area in IndexConfig.Areas do
-		if area.Id == eggId then
+		if area.Id == id then
 			return area
 		end
 	end

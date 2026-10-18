@@ -1,6 +1,6 @@
 --!nonstrict
 -- Rolls which pet comes out of an egg. Every crack lowers the chance of
--- anything better than Common.
+-- anything better than Common, or on one-animal eggs makes the pet lighter.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -52,6 +52,11 @@ function Hatching.Roll(eggData)
 	end
 
 	local weight = eggData.Kg * (chosen.SizeMul or 1) * rng:NextNumber(0.85, 1.25)
+	if #egg.Pets == 1 then
+		-- One-animal eggs can't roll a worse pet, so cracks shrink the pet
+		-- instead (lighter pet = worth less and earns less).
+		weight *= S.CrackLuckMultiplier ^ (eggData.Cracks or 0)
+	end
 	return {
 		Name = chosen.Name,
 		Rarity = chosen.Rarity,

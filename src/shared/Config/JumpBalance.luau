@@ -69,11 +69,13 @@ JumpBalance.TrampolineTiers = {
 	{ Name = "Forest Trampoline", Skin = "Forest", XpPerBounce = 2, Price = 250, Island = 1, Color = Color3.fromRGB(120, 205, 95) },
 	{ Name = "Beach Trampoline", Skin = "Beach", XpPerBounce = 3, Price = 1000, Island = 2, Color = Color3.fromRGB(255, 205, 110) },
 	{ Name = "Cherry Blossom Trampoline", Skin = "CherryBlossom", XpPerBounce = 5, Price = 4000, Island = 3, Color = Color3.fromRGB(255, 160, 205) },
-	{ Name = "Candy Trampoline", Skin = "Candy", XpPerBounce = 10, Price = 15000, Island = 4, Color = Color3.fromRGB(255, 115, 185) },
-	{ Name = "Ice Trampoline", Skin = "Ice", XpPerBounce = 20, Price = 50000, Island = 5, Color = Color3.fromRGB(150, 220, 255) },
-	{ Name = "Crystal Trampoline", Skin = "Crystal", XpPerBounce = 50, Price = 150000, Island = 6, Color = Color3.fromRGB(180, 120, 255) },
-	{ Name = "Space Trampoline", Skin = "Space", XpPerBounce = 120, Price = 500000, Island = 7, Color = Color3.fromRGB(90, 220, 255) },
-	{ Name = "Volcano Trampoline", Skin = "Volcano", XpPerBounce = 250, Price = 2000000, Island = 8, Color = Color3.fromRGB(255, 115, 55) },
+	-- Islands 4-8 became Snow, Desert, Jungle, Volcano, Candy Sky (2026-10-18).
+	-- Desert and Jungle still borrow the old Crystal / Space skins until they get their own.
+	{ Name = "Snow Trampoline", Skin = "Ice", XpPerBounce = 10, Price = 15000, Island = 4, Color = Color3.fromRGB(150, 220, 255) },
+	{ Name = "Desert Trampoline", Skin = "Crystal", XpPerBounce = 20, Price = 50000, Island = 5, Color = Color3.fromRGB(235, 190, 110) },
+	{ Name = "Jungle Trampoline", Skin = "Space", XpPerBounce = 50, Price = 150000, Island = 6, Color = Color3.fromRGB(70, 170, 80) },
+	{ Name = "Volcano Trampoline", Skin = "Volcano", XpPerBounce = 120, Price = 500000, Island = 7, Color = Color3.fromRGB(255, 115, 55) },
+	{ Name = "Candy Sky Trampoline", Skin = "Candy", XpPerBounce = 250, Price = 2000000, Island = 8, Color = Color3.fromRGB(255, 115, 185) },
 }
 
 function JumpBalance.Tier(tier: number?)
@@ -99,11 +101,11 @@ JumpBalance.FallbackIslands = {
 	{ Number = 1, Id = "Forest", TopY = 150 },
 	{ Number = 2, Id = "Beach", TopY = 367 },
 	{ Number = 3, Id = "CherryBlossom", TopY = 682 },
-	{ Number = 4, Id = "Candy", TopY = 1139 },
-	{ Number = 5, Id = "Ice", TopY = 1802 },
-	{ Number = 6, Id = "Crystal", TopY = 2763 },
-	{ Number = 7, Id = "Space", TopY = 4157 },
-	{ Number = 8, Id = "Volcano", TopY = 6178 },
+	{ Number = 4, Id = "Snow", TopY = 1139 },
+	{ Number = 5, Id = "Desert", TopY = 1802 },
+	{ Number = 6, Id = "Jungle", TopY = 2763 },
+	{ Number = 7, Id = "Volcano", TopY = 4157 },
+	{ Number = 8, Id = "CandySky", TopY = 6178 },
 }
 
 function JumpBalance.RequiredJumpForGap(gapHeight: number): number
