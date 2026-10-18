@@ -1,12 +1,15 @@
 -- Bubbly loading screen. Lives in ReplicatedFirst so it shows before anything
 -- else, which also means it can't use the shared UI modules (they may not have
 -- arrived yet), so the styling is written out here.
+-- Once loading is done it stays up until the player presses PLAY (or clicks /
+-- taps anywhere, or presses Enter/Space).
 
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local MIN_SECONDS = 2.5
 local MAX_SECONDS = 25 -- never trap anyone on the loading screen
@@ -171,6 +174,106 @@ skip.Activated:Connect(function()
 	skipped = true
 end)
 
+-- Big chunky PLAY button, shown once loading is done.
+local LIP = Color3.fromRGB(25, 150, 100)
+local play = Instance.new("TextButton")
+play.Name = "Play"
+play.Text = ""
+play.AutoButtonColor = false
+play.Size = UDim2.fromOffset(300, 96)
+play.Position = UDim2.fromScale(0.5, 0.72)
+play.AnchorPoint = Vector2.new(0.5, 0.5)
+play.BackgroundColor3 = Color3.new(1, 1, 1)
+play.Visible = false
+play.ZIndex = 3
+corner(play, UDim.new(0, 30))
+outline(play, 5, true)
+local playGradient = Instance.new("UIGradient")
+playGradient.Rotation = 90
+playGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 255, 200)),
+	ColorSequenceKeypoint.new(0.74, Color3.fromRGB(35, 200, 135)),
+	ColorSequenceKeypoint.new(0.78, LIP),
+	ColorSequenceKeypoint.new(1, LIP),
+})
+playGradient.Parent = play
+local playShine = Instance.new("Frame")
+playShine.BackgroundColor3 = Color3.new(1, 1, 1)
+playShine.BackgroundTransparency = 0.55
+playShine.BorderSizePixel = 0
+playShine.Size = UDim2.fromScale(0.86, 0.34)
+playShine.Position = UDim2.fromScale(0.07, 0.07)
+playShine.ZIndex = 3
+corner(playShine, UDim.new(1, 0))
+local shineFade = Instance.new("UIGradient")
+shineFade.Rotation = 90
+shineFade.Transparency = NumberSequence.new(0, 1)
+shineFade.Parent = playShine
+playShine.Parent = play
+local playText = label("PLAY!", UDim2.fromScale(0.8, 0.62), UDim2.fromScale(0.5, 0.44), 64, play)
+playText.ZIndex = 4
+playText:FindFirstChildOfClass("UIStroke").Thickness = 4
+local playScale = Instance.new("UIScale")
+playScale.Parent = play
+-- Shadow under the button.
+local playShadow = Instance.new("Frame")
+playShadow.BackgroundColor3 = Color3.fromRGB(30, 15, 55)
+playShadow.BackgroundTransparency = 0.55
+playShadow.BorderSizePixel = 0
+playShadow.Size = play.Size
+playShadow.Position = play.Position + UDim2.fromOffset(0, 8)
+playShadow.AnchorPoint = play.AnchorPoint
+playShadow.Visible = false
+playShadow.ZIndex = 2
+corner(playShadow, UDim.new(0, 30))
+playShadow.Parent = background
+play.Parent = background
+-- Phones: shrink the button to fit.
+local fit = Instance.new("UIScale")
+fit.Parent = playShadow
+local function fitPlay()
+	local width = gui.AbsoluteSize.X
+	local s = math.min(1, width * 0.7 / 300)
+	fit.Scale = s
+	return s
+end
+
+local tapHint = label("or tap anywhere", UDim2.fromScale(0.4, 0.04), UDim2.fromScale(0.5, 0.81), 26, background)
+tapHint.Visible = false
+
+-- Whole-screen catcher so a click or tap anywhere counts.
+local anywhere = Instance.new("TextButton")
+anywhere.Name = "TapAnywhere"
+anywhere.Text = ""
+anywhere.BackgroundTransparency = 1
+anywhere.Size = UDim2.fromScale(1, 1)
+anywhere.ZIndex = 1
+anywhere.Visible = false
+anywhere.Parent = background
+
+local wantsPlay = false
+local function pressPlay()
+	if play.Visible then
+		wantsPlay = true
+	end
+end
+play.Activated:Connect(pressPlay)
+anywhere.Activated:Connect(pressPlay)
+play.MouseEnter:Connect(function()
+	TweenService:Create(playScale, TweenInfo.new(0.14, Enum.EasingStyle.Back), { Scale = fitPlay() * 1.06 }):Play()
+end)
+play.MouseLeave:Connect(function()
+	TweenService:Create(playScale, TweenInfo.new(0.14, Enum.EasingStyle.Back), { Scale = fitPlay() }):Play()
+end)
+play.MouseButton1Down:Connect(function()
+	TweenService:Create(playScale, TweenInfo.new(0.1), { Scale = fitPlay() * 0.9 }):Play()
+end)
+UserInputService.InputBegan:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+		pressPlay()
+	end
+end)
+
 -- Animate everything while we wait.
 local shownProgress = 0
 local animation = RunService.RenderStepped:Connect(function(dt)
@@ -228,8 +331,30 @@ while os.clock() - started < MIN_SECONDS and not skipped do
 	task.wait()
 end
 setProgress(1)
-status.Text = "Let's go!"
+status.Text = "Ready!"
 task.wait(0.3)
+
+-- 4. Wait for the player to press PLAY (or tap anywhere).
+skip.Visible = false
+bar.Visible = false
+status.Visible = false
+play.Visible = true
+playShadow.Visible = true
+tapHint.Visible = true
+anywhere.Visible = true
+local target = fitPlay()
+playScale.Scale = 0.3 * target
+TweenService:Create(playScale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = target }):Play()
+local pulse = RunService.RenderStepped:Connect(function()
+	local t = os.clock() - started
+	play.Rotation = math.sin(t * 3) * 2
+	playShadow.Rotation = play.Rotation
+	tapHint.TextTransparency = 0.25 + math.sin(t * 4) * 0.25
+end)
+while not wantsPlay do
+	task.wait()
+end
+pulse:Disconnect()
 
 -- Slide away and clean up.
 animation:Disconnect()

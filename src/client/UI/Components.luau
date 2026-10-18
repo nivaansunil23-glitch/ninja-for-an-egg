@@ -27,10 +27,12 @@ function Components.Stroke(parent: GuiObject, thickness: number?, color: Color3?
 	return stroke
 end
 
-function Components.Gradient(parent: GuiObject, colors)
+-- lip = true adds a darker band along the bottom (see Theme.LipSequence).
+function Components.Gradient(parent: GuiObject, colors, lip: boolean?)
 	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(colors[1], colors[2])
+	gradient.Color = if lip then Theme.LipSequence(colors) else ColorSequence.new(colors[1], colors[2])
 	gradient.Rotation = 90
+	gradient:SetAttribute("Lip", lip == true)
 	gradient.Parent = parent
 	return gradient
 end
@@ -38,8 +40,47 @@ end
 function Components.SetColors(object: GuiObject, colors)
 	local gradient = object:FindFirstChildOfClass("UIGradient")
 	if gradient then
-		gradient.Color = ColorSequence.new(colors[1], colors[2])
+		gradient.Color = if gradient:GetAttribute("Lip")
+			then Theme.LipSequence(colors)
+			else ColorSequence.new(colors[1], colors[2])
 	end
+end
+
+-- Soft shadow just under a GuiObject. It has to be a sibling (children always
+-- draw on top of their parent), so it follows the object's size, position,
+-- visibility and parent.
+function Components.Shadow(object: GuiObject, offset: number?)
+	local shadow = Instance.new("Frame")
+	shadow.Name = object.Name .. "Shadow"
+	shadow.BackgroundColor3 = Theme.Shadow
+	shadow.BackgroundTransparency = 0.55
+	shadow.BorderSizePixel = 0
+	shadow.ZIndex = math.max(object.ZIndex - 1, 0)
+	local corner = object:FindFirstChildOfClass("UICorner")
+	if corner then
+		Components.Corner(shadow, corner.CornerRadius)
+	end
+	local drop = offset or 6
+	local function sync()
+		shadow.Size = object.Size
+		shadow.AnchorPoint = object.AnchorPoint
+		shadow.Position = object.Position + UDim2.fromOffset(0, drop)
+		shadow.Visible = object.Visible
+		shadow.Rotation = object.Rotation
+	end
+	for _, property in { "Size", "Position", "AnchorPoint", "Visible", "Rotation" } do
+		object:GetPropertyChangedSignal(property):Connect(sync)
+	end
+	object.AncestryChanged:Connect(function()
+		if object.Parent then
+			shadow.Parent = object.Parent
+		else
+			shadow:Destroy()
+		end
+	end)
+	sync()
+	shadow.Parent = object.Parent
+	return shadow
 end
 
 -- A rounded box with outline and gradient.
@@ -54,7 +95,7 @@ function Components.Box(props)
 	frame.ZIndex = props.ZIndex or 1
 	Components.Corner(frame, props.CornerRadius)
 	Components.Stroke(frame, props.StrokeThickness)
-	Components.Gradient(frame, props.Colors or Theme.Colors.Row)
+	Components.Gradient(frame, props.Colors or Theme.Colors.Row, props.Lip)
 	frame.Parent = props.Parent
 	return frame
 end
@@ -81,6 +122,7 @@ function Components.Label(props)
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = props.StrokeThickness or 2
 	stroke.Color = Theme.Outline
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
 	stroke.Parent = label
 
 	local limit = Instance.new("UITextSizeConstraint")
@@ -106,7 +148,10 @@ function Components.Button(props)
 	button.ZIndex = props.ZIndex or 1
 	Components.Corner(button, props.CornerRadius)
 	Components.Stroke(button, props.StrokeThickness or 3)
-	Components.Gradient(button, props.Colors or Theme.Colors.Pink)
+	Components.Gradient(button, props.Colors or Theme.Colors.Pink, props.Lip ~= false)
+	if props.Shine ~= false then
+		Components.Shine(button, 0.35)
+	end
 
 	local scale = Instance.new("UIScale")
 	scale.Parent = button
@@ -115,10 +160,12 @@ function Components.Button(props)
 		Name = "Text",
 		Text = props.Text,
 		Parent = button,
-		Size = props.LabelSize or UDim2.fromScale(0.86, 0.7),
-		Position = props.LabelPosition or UDim2.fromScale(0.5, 0.5),
+		Size = props.LabelSize or UDim2.fromScale(0.86, 0.62),
+		-- Nudged up so the text sits above the darker lip.
+		Position = props.LabelPosition or UDim2.fromScale(0.5, 0.44),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = props.MaxTextSize or 32,
+		StrokeThickness = props.TextStroke or 2.5,
 		ZIndex = button.ZIndex,
 	})
 
@@ -145,8 +192,13 @@ function Components.Button(props)
 	return button, label
 end
 
--- Glossy highlight across the top of a box or button.
+-- Glossy highlight across the top of a box or button. Only one per object.
 function Components.Shine(parent: GuiObject, strength: number?)
+	local existing = parent:FindFirstChild("Shine")
+	if existing and existing:IsA("Frame") then
+		existing.BackgroundTransparency = 1 - (strength or 0.45)
+		return existing
+	end
 	local shine = Instance.new("Frame")
 	shine.Name = "Shine"
 	shine.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -176,14 +228,15 @@ function Components.Tag(props)
 		CornerRadius = UDim.new(1, 0),
 		StrokeThickness = props.StrokeThickness or 2.5,
 		ZIndex = props.ZIndex,
+		Lip = true,
 	})
 	tag.Rotation = props.Rotation or 0
 	local label = Components.Label({
 		Name = "Text",
 		Text = props.Text,
 		Parent = tag,
-		Size = UDim2.fromScale(0.84, 0.72),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.84, 0.66),
+		Position = UDim2.fromScale(0.5, 0.45),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = props.MaxTextSize or 18,
 		ZIndex = props.ZIndex,
@@ -298,6 +351,22 @@ function Components.Window(props)
 	Components.Stroke(frame, 5)
 	Components.Gradient(frame, Theme.Colors.Panel)
 
+	-- Glossy white rim just inside the outline.
+	local rim = Instance.new("Frame")
+	rim.Name = "Rim"
+	rim.BackgroundTransparency = 1
+	rim.Size = UDim2.new(1, -12, 1, -12)
+	rim.Position = UDim2.fromScale(0.5, 0.5)
+	rim.AnchorPoint = Vector2.new(0.5, 0.5)
+	rim.ZIndex = frame.ZIndex
+	Components.Corner(rim, UDim.new(0, 23))
+	local rimStroke = Instance.new("UIStroke")
+	rimStroke.Color = Color3.new(1, 1, 1)
+	rimStroke.Thickness = 3
+	rimStroke.Transparency = 0.25
+	rimStroke.Parent = rim
+	rim.Parent = frame
+
 	local scale = Instance.new("UIScale")
 	scale.Parent = frame
 
@@ -316,15 +385,17 @@ function Components.Window(props)
 		Colors = props.Colors or Theme.Colors.Pink,
 		CornerRadius = UDim.new(0, 20),
 		StrokeThickness = 4,
+		Lip = true,
 	})
+	Components.Shine(ribbon, 0.35)
 	local title = Components.Label({
 		Text = props.Title,
 		Parent = ribbon,
-		Size = UDim2.fromScale(0.85, 0.72),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.85, 0.66),
+		Position = UDim2.fromScale(0.5, 0.44),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 38,
-		StrokeThickness = 3,
+		StrokeThickness = 3.5,
 	})
 
 	local content = Instance.new("Frame")
@@ -354,6 +425,14 @@ function Components.Window(props)
 		frame.Visible = true
 		TweenService:Create(scale, POP_IN, { Scale = target }):Play()
 	end
+
+	-- Shadow under the whole window, scaled along with it.
+	local shadow = Components.Shadow(frame, 10)
+	local shadowScale = Instance.new("UIScale")
+	shadowScale.Parent = shadow
+	scale:GetPropertyChangedSignal("Scale"):Connect(function()
+		shadowScale.Scale = scale.Scale
+	end)
 
 	function window.Close()
 		frame.Visible = false
@@ -412,26 +491,47 @@ function Components.Notify(gui: ScreenGui, text: string, color: Color3?)
 		holder.Parent = gui
 	end
 
+	-- Text on a dark rounded plate so it reads over any background.
+	local plate = Instance.new("Frame")
+	plate.Name = "Toast"
+	plate.BackgroundColor3 = Theme.Shadow
+	plate.BackgroundTransparency = 0.2
+	plate.AutomaticSize = Enum.AutomaticSize.X
+	plate.Size = UDim2.fromOffset(0, 42)
+	plate.LayoutOrder = math.floor(os.clock() * 100)
+	plate.ZIndex = 20
+	Components.Corner(plate, UDim.new(1, 0))
+	local plateStroke = Components.Stroke(plate, 3, color or Theme.Colors.Pink[1])
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 22)
+	padding.PaddingRight = UDim.new(0, 22)
+	padding.Parent = plate
+	plate.Parent = holder
+
 	local label = Components.Label({
 		Text = text,
-		Parent = holder,
-		Size = UDim2.new(1, 0, 0.2, 0),
+		Parent = plate,
 		Color = color,
-		MaxTextSize = 34,
-		StrokeThickness = 3,
-		LayoutOrder = math.floor(os.clock() * 100),
+		StrokeThickness = 2.5,
+		ZIndex = 21,
 	})
-	Components.Pop(label, 0.3)
+	label.TextScaled = false
+	label.TextSize = 26
+	label.AutomaticSize = Enum.AutomaticSize.X
+	label.Size = UDim2.fromScale(0, 1)
+	Components.Pop(plate, 0.4)
 
 	task.delay(2.2, function()
 		local fadeInfo = TweenInfo.new(0.4)
 		TweenService:Create(label, fadeInfo, { TextTransparency = 1 }):Play()
+		TweenService:Create(plate, fadeInfo, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(plateStroke, fadeInfo, { Transparency = 1 }):Play()
 		local stroke = label:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			TweenService:Create(stroke, fadeInfo, { Transparency = 1 }):Play()
 		end
 		task.wait(0.4)
-		label:Destroy()
+		plate:Destroy()
 	end)
 end
 

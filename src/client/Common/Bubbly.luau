@@ -49,10 +49,23 @@ function Bubbly.Stroke(parent: GuiObject, thickness: number?)
 	return stroke
 end
 
-function Bubbly.Gradient(parent: GuiObject, colors)
+-- Gradient with a darker band along the bottom, so buttons look chunky (same
+-- as Theme.LipSequence).
+local function lipSequence(colors): ColorSequence
+	local lip = colors[2]:Lerp(Color3.new(0, 0, 0), 0.22)
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, colors[1]),
+		ColorSequenceKeypoint.new(0.74, colors[2]),
+		ColorSequenceKeypoint.new(0.78, lip),
+		ColorSequenceKeypoint.new(1, lip),
+	})
+end
+
+function Bubbly.Gradient(parent: GuiObject, colors, lip: boolean?)
 	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(colors[1], colors[2])
+	gradient.Color = if lip then lipSequence(colors) else ColorSequence.new(colors[1], colors[2])
 	gradient.Rotation = 90
+	gradient:SetAttribute("Lip", lip == true)
 	gradient.Parent = parent
 	return gradient
 end
@@ -60,8 +73,29 @@ end
 function Bubbly.SetColors(object: GuiObject, colors)
 	local gradient = object:FindFirstChildOfClass("UIGradient")
 	if gradient then
-		gradient.Color = ColorSequence.new(colors[1], colors[2])
+		gradient.Color = if gradient:GetAttribute("Lip")
+			then lipSequence(colors)
+			else ColorSequence.new(colors[1], colors[2])
 	end
+end
+
+-- Glossy highlight across the top of a box or button.
+function Bubbly.Shine(parent: GuiObject, strength: number?)
+	local shine = Instance.new("Frame")
+	shine.Name = "Shine"
+	shine.BackgroundColor3 = Color3.new(1, 1, 1)
+	shine.BackgroundTransparency = 1 - (strength or 0.35)
+	shine.BorderSizePixel = 0
+	shine.Size = UDim2.fromScale(0.86, 0.34)
+	shine.Position = UDim2.fromScale(0.07, 0.07)
+	shine.ZIndex = parent.ZIndex
+	Bubbly.Corner(shine, UDim.new(1, 0))
+	local fade = Instance.new("UIGradient")
+	fade.Rotation = 90
+	fade.Transparency = NumberSequence.new(0, 1)
+	fade.Parent = shine
+	shine.Parent = parent
+	return shine
 end
 
 -- Rounded box with an outline and a gradient.
@@ -101,6 +135,7 @@ function Bubbly.Label(props)
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = props.StrokeThickness or 2
 	stroke.Color = Bubbly.Outline
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
 	stroke.Parent = label
 
 	local limit = Instance.new("UITextSizeConstraint")
@@ -125,7 +160,8 @@ function Bubbly.Button(props)
 	button.ZIndex = props.ZIndex or 1
 	Bubbly.Corner(button, props.CornerRadius)
 	Bubbly.Stroke(button, props.StrokeThickness or 3)
-	Bubbly.Gradient(button, props.Colors or Bubbly.Colors.Pink)
+	Bubbly.Gradient(button, props.Colors or Bubbly.Colors.Pink, true)
+	Bubbly.Shine(button)
 
 	local scale = Instance.new("UIScale")
 	scale.Parent = button
@@ -134,11 +170,11 @@ function Bubbly.Button(props)
 		Name = "Text",
 		Text = props.Text,
 		Parent = button,
-		Size = props.LabelSize or UDim2.fromScale(0.86, 0.7),
-		Position = props.LabelPosition or UDim2.fromScale(0.5, 0.5),
+		Size = props.LabelSize or UDim2.fromScale(0.86, 0.62),
+		Position = props.LabelPosition or UDim2.fromScale(0.5, 0.44),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = props.MaxTextSize or 32,
-		StrokeThickness = props.TextStroke or 2,
+		StrokeThickness = props.TextStroke or 2.5,
 		ZIndex = button.ZIndex,
 	})
 

@@ -32,6 +32,22 @@ Theme.RarityIcon = {
 	Secret = "👾",
 }
 
+-- Soft drop shadow under panels and buttons.
+Theme.Shadow = Color3.fromRGB(30, 15, 55)
+
+-- Gradient with a darker "lip" along the bottom edge, so buttons look chunky
+-- and pressable (like BGSI buttons) without any extra frames.
+function Theme.LipSequence(colors): ColorSequence
+	local top, bottom = colors[1], colors[2]
+	local lip = bottom:Lerp(Color3.new(0, 0, 0), 0.22)
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, top),
+		ColorSequenceKeypoint.new(0.74, bottom),
+		ColorSequenceKeypoint.new(0.78, lip),
+		ColorSequenceKeypoint.new(1, lip),
+	})
+end
+
 -- Gradient pair for a single color (lighter top, the color at the bottom).
 function Theme.FromColor(color: Color3)
 	return { color:Lerp(Color3.new(1, 1, 1), 0.35), color }

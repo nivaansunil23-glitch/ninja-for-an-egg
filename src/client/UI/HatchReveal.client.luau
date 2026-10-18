@@ -270,36 +270,65 @@ local function play(info)
 	petIcon.Rotation = -200
 	tween(petIcon, 0.6, { Rotation = 0 }, Enum.EasingStyle.Back)
 
-	-- 4. Name, rarity and weight underneath.
-	local card = Instance.new("Frame")
-	card.Name = "Info"
-	card.BackgroundTransparency = 1
-	card.Size = UDim2.fromScale(0.5, 0.2)
-	card.Position = UDim2.fromScale(0.5, 0.74)
-	card.AnchorPoint = Vector2.new(0.5, 0)
-	card.ZIndex = 6
-	card.Parent = screen
-	local nameLabel = Components.Label({
-		Text = pet.Name,
-		Parent = card,
-		Size = UDim2.fromScale(1, 0.42),
-		MaxTextSize = 56,
-		StrokeThickness = 4,
+	-- 4. "You hatched!" banner on top, and a card with name, rarity and weight.
+	local banner, bannerText = Components.Tag({
+		Name = "Banner",
+		Text = "🎉 YOU HATCHED! 🎉",
+		Parent = screen,
+		Size = UDim2.fromOffset(420, 70),
+		Position = UDim2.fromScale(0.5, 0.06),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Colors = Theme.Colors.Yellow,
+		StrokeThickness = 5,
+		MaxTextSize = 44,
 		ZIndex = 6,
 	})
+	banner.Rotation = -2
+	Components.Shine(banner, 0.4)
+	bannerText:FindFirstChildOfClass("UIStroke").Thickness = 3.5
+
+	local card = Components.Box({
+		Name = "Info",
+		Parent = screen,
+		Size = UDim2.fromOffset(380, 150),
+		Position = UDim2.fromScale(0.5, 0.72),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Colors = Theme.Tint(rarityColor),
+		CornerRadius = UDim.new(0, 26),
+		StrokeThickness = 5,
+		ZIndex = 6,
+	})
+	Components.Shine(card, 0.5)
+	-- Phones: shrink the fixed-size card and banner to fit.
+	local fit = Instance.new("UIScale")
+	fit.Parent = card
+	local bannerFit = Instance.new("UIScale")
+	bannerFit.Parent = banner
+	local viewport = gui.AbsoluteSize
+	fit.Scale = math.min(1, viewport.X * 0.9 / 380, viewport.Y * 0.24 / 150)
+	bannerFit.Scale = math.min(1, viewport.X * 0.9 / 420)
+
 	local tag, tagText = Components.Tag({
 		Text = string.upper(pet.Rarity),
 		Parent = card,
-		Size = UDim2.fromScale(0.3, 0.26),
-		Position = UDim2.fromScale(0.5, 0.46),
+		Size = UDim2.fromOffset(170, 42),
+		Position = UDim2.new(0.5, 0, 0, -22),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Colors = Theme.FromColor(rarityColor),
+		StrokeThickness = 4,
 		MaxTextSize = 28,
-		ZIndex = 6,
+		ZIndex = 7,
 	})
-	local tagLimit = Instance.new("UISizeConstraint")
-	tagLimit.MinSize = Vector2.new(110, 30)
-	tagLimit.Parent = tag
+	Components.Shine(tag, 0.35)
+	local nameLabel = Components.Label({
+		Text = pet.Name,
+		Parent = card,
+		Size = UDim2.new(1, -30, 0, 54),
+		Position = UDim2.fromOffset(15, 28),
+		MaxTextSize = 50,
+		StrokeThickness = 4,
+		ZIndex = 7,
+	})
 	if pet.Rarity == "Secret" then
 		local gradient = tag:FindFirstChildOfClass("UIGradient")
 		if gradient then
@@ -313,13 +342,17 @@ local function play(info)
 			end)
 		end
 	end
-	Components.Label({
+	Components.Tag({
+		Name = "Weight",
 		Text = string.format("⚖️ %.2f kg", pet.Weight or 0),
 		Parent = card,
-		Size = UDim2.fromScale(1, 0.22),
-		Position = UDim2.fromScale(0, 0.78),
-		MaxTextSize = 30,
-		ZIndex = 6,
+		Size = UDim2.fromOffset(180, 40),
+		Position = UDim2.new(0.5, 0, 1, -16),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Colors = Theme.Colors.Sky,
+		StrokeThickness = 3.5,
+		MaxTextSize = 26,
+		ZIndex = 7,
 	})
 	local hint = Components.Label({
 		Text = "Tap to continue",
@@ -327,12 +360,18 @@ local function play(info)
 		Size = UDim2.fromScale(0.3, 0.04),
 		Position = UDim2.fromScale(0.5, 0.97),
 		AnchorPoint = Vector2.new(0.5, 1),
-		MaxTextSize = 22,
+		MaxTextSize = 24,
+		StrokeThickness = 3,
 	})
 	for _, label in { nameLabel, tagText } do
 		Components.Pop(label, 0.3)
 	end
 	Components.Pop(tag, 0.3)
+	-- Pop the card and banner in on their fit scales (no second UIScale).
+	for _, pair in { { fit, fit.Scale }, { bannerFit, bannerFit.Scale } } do
+		pair[1].Scale = pair[2] * 0.4
+		tween(pair[1], 0.35, { Scale = pair[2] }, Enum.EasingStyle.Back)
+	end
 	task.delay(0.2, function()
 		Components.Burst(gui, center, { "⭐", "✨", "🎉", Theme.RarityIcon[pet.Rarity] or "🐣" })
 		if rank >= 4 then
@@ -361,6 +400,7 @@ local function play(info)
 	tween(revealScale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 	tween(screen, 0.3, { BackgroundTransparency = 1 })
 	card.Visible = false
+	banner.Visible = false
 	task.wait(0.3)
 	spin:Disconnect()
 	screen:Destroy()

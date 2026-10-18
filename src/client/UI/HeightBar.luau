@@ -71,35 +71,52 @@ function HeightBar.Build(gui: ScreenGui)
 	limits.MaxSize = Vector2.new(760, 120)
 	limits.Parent = holder
 
+	-- Dark rounded plate behind a label, so it reads over the sky and the map.
+	local function plate(name: string, size: UDim2, position: UDim2, anchor: Vector2, strokeColor: Color3)
+		local frame = Instance.new("Frame")
+		frame.Name = name
+		frame.BackgroundColor3 = Theme.Shadow
+		frame.BackgroundTransparency = 0.25
+		frame.Size = size
+		frame.Position = position
+		frame.AnchorPoint = anchor
+		Components.Corner(frame, UDim.new(1, 0))
+		Components.Stroke(frame, 3, strokeColor)
+		frame.Parent = holder
+		return frame
+	end
+
 	-- Height counter, above the bar.
+	local heightPlate = plate("HeightPlate", UDim2.fromScale(0.26, 0.4), UDim2.fromScale(0.5, 0), Vector2.new(0.5, 0), Theme.Colors.Sky[1])
 	local heightLabel = Components.Label({
 		Name = "Height",
 		Text = "0m",
-		Parent = holder,
-		Size = UDim2.fromScale(0.3, 0.36),
-		Position = UDim2.fromScale(0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0),
+		Parent = heightPlate,
+		Size = UDim2.fromScale(0.86, 0.82),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 40,
 		StrokeThickness = 3,
 	})
+	local bestPlate = plate("BestPlate", UDim2.fromScale(0.22, 0.28), UDim2.fromScale(0, 0.1), Vector2.zero, Theme.Colors.Yellow[2])
 	local bestLabel = Components.Label({
 		Name = "Best",
 		Text = "🏆 0m",
-		Parent = holder,
-		Size = UDim2.fromScale(0.2, 0.24),
-		Position = UDim2.fromScale(0, 0.08),
-		XAlign = Enum.TextXAlignment.Left,
+		Parent = bestPlate,
+		Size = UDim2.fromScale(0.84, 0.78),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = Theme.Colors.Yellow[1],
 		MaxTextSize = 24,
 	})
+	local nextPlate = plate("NextPlate", UDim2.fromScale(0.34, 0.28), UDim2.fromScale(1, 0.1), Vector2.new(1, 0), Theme.Colors.Mint[2])
 	local nextLabel = Components.Label({
 		Name = "Next",
 		Text = "",
-		Parent = holder,
-		Size = UDim2.fromScale(0.32, 0.24),
-		Position = UDim2.fromScale(1, 0.08),
-		AnchorPoint = Vector2.new(1, 0),
-		XAlign = Enum.TextXAlignment.Right,
+		Parent = nextPlate,
+		Size = UDim2.fromScale(0.88, 0.78),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 22,
 	})
 
@@ -111,8 +128,10 @@ function HeightBar.Build(gui: ScreenGui)
 		Position = UDim2.fromScale(0, 0.7),
 		Colors = { Color3.fromRGB(80, 65, 120), Color3.fromRGB(50, 35, 85) },
 		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 3,
+		StrokeThickness = 4,
+		ZIndex = 2,
 	})
+	Components.Shadow(track, 4)
 	local fillClip = Instance.new("Frame")
 	fillClip.Name = "Fill"
 	fillClip.BackgroundTransparency = 1
@@ -192,9 +211,11 @@ function HeightBar.Build(gui: ScreenGui)
 				AnchorPoint = Vector2.new(if i == #list then 0.75 else 0.5, 0.5),
 				Colors = LOCKED,
 				CornerRadius = UDim.new(1, 0),
-				StrokeThickness = 3,
+				StrokeThickness = 3.5,
 				ZIndex = 4,
+				Lip = true,
 			})
+			Components.Shine(bubble, 0.35)
 			bubble.SizeConstraint = Enum.SizeConstraint.RelativeYY
 			local icon = Components.Label({
 				Name = "Icon",
