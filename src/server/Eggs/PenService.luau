@@ -20,6 +20,7 @@
 --
 -- Set on the plot: OwnerUserId (0 when free), OwnerName, PenLevel attributes.
 -- Set on the Player: PlotName, PenLevel, PenNests attributes.
+-- Players spawn (and respawn) at their plot's PlotSpawn marker.
 -- Growing eggs are saved in PlayerData (data.Eggs.Pens) with a real-time
 -- ReadyAt, so they keep growing while the player is offline.
 
@@ -610,6 +611,21 @@ local function clearUpgradeSign(plot)
 	plot.UpgradeBoard = nil
 end
 
+-- Put the player at their plot's entrance (PlotSpawn marker), facing the pen.
+local function sendToPlot(player, plot)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local marker = plot.Model:FindFirstChild("PlotSpawn", true)
+	if not root or not marker or not marker:IsA("BasePart") or playerPlot[player] ~= plot then
+		return
+	end
+	local pen = plot.Model:FindFirstChild("Pen")
+	local spot = marker.Position + Vector3.new(0, 4, 0)
+	local look = if pen then pen:GetPivot().Position else spot + marker.CFrame.LookVector
+	look = Vector3.new(look.X, spot.Y, look.Z)
+	character:PivotTo(if (look - spot).Magnitude > 0.1 then CFrame.lookAt(spot, look) else CFrame.new(spot))
+end
+
 local function assignPlot(player)
 	local data = EggSave.WaitForData(player)
 	if not data or not player.Parent or playerPlot[player] then
@@ -685,6 +701,14 @@ local function assignPlot(player)
 	end
 	setupUpgradeSign(player, plot)
 	applyLevel(plot, getPenLevel(data))
+
+	-- Start (and respawn) at your own pen.
+	plot.SpawnConnection = player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait()
+		sendToPlot(player, plot)
+	end)
+	sendToPlot(player, plot)
 end
 
 local function releasePlot(player)
@@ -694,6 +718,10 @@ local function releasePlot(player)
 	end
 	playerPlot[player] = nil
 	plot.Owner = nil
+	if plot.SpawnConnection then
+		plot.SpawnConnection:Disconnect()
+		plot.SpawnConnection = nil
+	end
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.Model:SetAttribute("OwnerName", nil)
 	plot.Model:SetAttribute("PenLevel", nil)

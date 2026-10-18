@@ -316,6 +316,20 @@ local function makeSign(titleColor: Color3)
 	return { Gui = sign, Title = title, Sub = sub }
 end
 
+-- A trampoline inside a claimed plot uses its owner's tier, any other uses yours.
+local function tierFor(trampoline: Instance): number
+	local node = trampoline.Parent
+	while node and node ~= Workspace do
+		local owner = node:GetAttribute("OwnerUserId")
+		if type(owner) == "number" and owner > 0 then
+			local ownerPlayer = Players:GetPlayerByUserId(owner)
+			return ownerPlayer and ownerPlayer:GetAttribute("TrampolineTier") or 1
+		end
+		node = node.Parent
+	end
+	return player:GetAttribute("TrampolineTier") or 1
+end
+
 local function refreshSigns()
 	local tier = JumpBalance.Tier(player:GetAttribute("TrampolineTier"))
 	local seen = {}
@@ -334,9 +348,10 @@ local function refreshSigns()
 				sign.Title.Text = "🚀 LAUNCH"
 				sign.Sub.Text = `Jump {JumpBalance.LaunchHeightMultiplier}x higher!`
 			else
+				local own = JumpBalance.Tier(tierFor(trampoline))
 				sign.Gui.Enabled = pad ~= nil and session == nil
 				sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
-				sign.Sub.Text = "Bounce to train!"
+				sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
 			end
 		end
 	end
@@ -355,19 +370,6 @@ end
 -- pivot at the bottom centre and get scaled to the trampoline's width.
 
 local skins = {} -- [trampoline] = { Name, Model }
-
-local function tierFor(trampoline: Instance): number
-	local node = trampoline.Parent
-	while node and node ~= Workspace do
-		local owner = node:GetAttribute("OwnerUserId")
-		if type(owner) == "number" and owner > 0 then
-			local ownerPlayer = Players:GetPlayerByUserId(owner)
-			return ownerPlayer and ownerPlayer:GetAttribute("TrampolineTier") or 1
-		end
-		node = node.Parent
-	end
-	return player:GetAttribute("TrampolineTier") or 1
-end
 
 -- The trampoline's visible parts (not the invisible pads).
 local function lookParts(trampoline: Instance): { BasePart }
