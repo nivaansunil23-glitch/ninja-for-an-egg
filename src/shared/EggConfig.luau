@@ -27,6 +27,11 @@ EggConfig.Settings = {
 	MaxCracks = 3, -- the 3rd crack breaks the egg
 	CrackFallStuds = 18, -- falling at least this far gives 1 crack
 	BigCrackFallStuds = 45, -- falling at least this far gives 2 cracks
+	-- Both crack heights are measured past a safe drop that grows with the gaps:
+	-- CrackSafeJumps x your jump height + CrackSafeSteps x the biggest cloud step
+	-- of the gap you land in. So normal cloud hops never crack, real falls do.
+	CrackSafeJumps = 1,
+	CrackSafeSteps = 1,
 	CrackLuckMultiplier = 0.6, -- each crack multiplies the chance of every non-Common pet by this
 	GroundCheckDistance = 4.5, -- studs below HumanoidRootPart that still count as standing
 
@@ -53,17 +58,18 @@ EggConfig.Settings = {
 	PetShowSeconds = 6, -- how long the hatched pet stands in the pen
 }
 
--- Pen upgrade levels. Nests = how many nests are unlocked at that level (in
+-- Pen upgrade levels. Nests = how many slots are unlocked at that level (in
 -- NestIndex order). Price = money to reach that level. Prices are placeholders.
--- A level can only be bought if the plot's pen has enough Nest parts for it.
+-- Pens have 12 slots: 1-6 have nests from the start, 7-12 are NestSpots that
+-- get a nest when bought. A level is only for sale if the pen has enough slots.
 EggConfig.PenLevels = {
-	{ Nests = 2, Price = 0 },
-	{ Nests = 3, Price = 1000 },
-	{ Nests = 4, Price = 5000 },
-	{ Nests = 5, Price = 25000 },
-	{ Nests = 6, Price = 100000 },
-	{ Nests = 7, Price = 500000 },
-	{ Nests = 8, Price = 2000000 },
+	{ Nests = 6, Price = 0 },
+	{ Nests = 7, Price = 5000 },
+	{ Nests = 8, Price = 25000 },
+	{ Nests = 9, Price = 100000 },
+	{ Nests = 10, Price = 500000 },
+	{ Nests = 11, Price = 2000000 },
+	{ Nests = 12, Price = 10000000 },
 }
 
 --[[

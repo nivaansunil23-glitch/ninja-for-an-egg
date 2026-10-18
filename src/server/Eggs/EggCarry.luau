@@ -17,6 +17,8 @@ local RunService = game:GetService("RunService")
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
 local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
 local EggFactory = require(script.Parent.EggFactory)
+local JumpBalance = require(ReplicatedStorage.Shared.Config.JumpBalance)
+local CloudConfig = require(ReplicatedStorage.Shared.Config.CloudConfig)
 
 local S = EggConfig.Settings
 
@@ -286,6 +288,33 @@ function EggCarry.AddCracks(player, amount)
 	end
 end
 
+-- Cloud steps grow with each gap (60-140 studs near the top), so a normal hop
+-- there would crack the egg with fixed heights. The crack heights start above a
+-- "safe" drop: one of your own jumps plus the biggest cloud step of the gap you
+-- land in. Only falls past that (skipping clouds, falling off an island) crack.
+local islandCache, islandCacheAt = nil, 0
+
+local function safeDrop(player, y)
+	if os.clock() - islandCacheAt > 10 or not islandCache then
+		islandCache = JumpBalance.GetIslands()
+		islandCacheAt = os.clock()
+	end
+	local gap
+	for _, island in islandCache do
+		gap = island
+		if y <= island.TopY + 5 then
+			break
+		end
+	end
+	local step = 0
+	if gap then
+		step = JumpBalance.MaxJumpHeight(gap.RequiredJump) * CloudConfig.StepMax
+	end
+	local power = player:GetAttribute("JumpPower")
+	local ownJump = if type(power) == "number" then JumpBalance.MaxJumpHeight(power) else 0
+	return S.CrackSafeJumps * ownJump + S.CrackSafeSteps * step
+end
+
 -- Measures each carrier's fall from the highest point of their time in the air.
 local function checkFalls()
 	for player, entry in carried do
@@ -301,6 +330,7 @@ local function checkFalls()
 				entry.AirPeak = nil
 				local skip = player:GetAttribute("NoFallCrack") or player.Character:GetAttribute("NoFallCrack")
 				if not skip then
+					drop -= safeDrop(player, y)
 					if drop >= S.BigCrackFallStuds then
 						EggCarry.AddCracks(player, 2)
 					elseif drop >= S.CrackFallStuds then

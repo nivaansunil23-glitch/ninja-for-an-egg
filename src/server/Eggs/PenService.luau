@@ -75,8 +75,9 @@ end
 local function findNests(plotModel)
 	local nests = {}
 	for _, d in plotModel:GetDescendants() do
-		if d:IsA("BasePart") and d.Name == "Nest" then
-			table.insert(nests, { Path = nestPath(plotModel, d), Part = d })
+		-- "NestSpot" = an empty slot (invisible marker) that gets a nest when the pen is upgraded.
+		if d:IsA("BasePart") and (d.Name == "Nest" or d.Name == "NestSpot") then
+			table.insert(nests, { Path = nestPath(plotModel, d), Part = d, IsSpot = d.Name == "NestSpot" })
 		end
 	end
 	local pivot = plotModel:GetPivot()
@@ -114,16 +115,63 @@ end
 
 -- Where the egg's bottom sits: an EggSpot next to or inside the nest, else the nest top.
 local function eggBase(nest)
+	local base = nest.Shell or nest.Part
 	local spot = nest.Part:FindFirstChild("EggSpot")
 		or (nest.Part.Parent and nest.Part.Parent:FindFirstChild("EggSpot"))
 	if spot and spot:IsA("BasePart") then
 		-- Only trust a sibling spot when it's actually above this nest.
-		local offset = spot.Position - nest.Part.Position
-		if Vector3.new(offset.X, 0, offset.Z).Magnitude < math.max(nest.Part.Size.X, nest.Part.Size.Z) then
-			return CFrame.new(spot.Position) * nest.Part.CFrame.Rotation
+		local offset = spot.Position - base.Position
+		if Vector3.new(offset.X, 0, offset.Z).Magnitude < math.max(base.Size.X, base.Size.Z, 4) then
+			return CFrame.new(spot.Position) * base.CFrame.Rotation
 		end
 	end
-	return nest.Part.CFrame * CFrame.new(0, nest.Part.Size.Y / 2, 0)
+	return base.CFrame * CFrame.new(0, base.Size.Y / 2, 0)
+end
+
+-- Unlocked NestSpots get a copy of one of the pen's real nests; locked ones lose it.
+local function setShell(plot, nest)
+	if not nest.IsSpot then
+		return
+	end
+	if not nest.Unlocked then
+		if nest.Shell then
+			nest.Shell:Destroy()
+			nest.Shell = nil
+		end
+		return
+	end
+	if nest.Shell and nest.Shell.Parent then
+		return
+	end
+	local template
+	for _, other in plot.Nests do
+		if not other.IsSpot then
+			template = other.Part
+			break
+		end
+	end
+	if not template then
+		return
+	end
+	local shell = template:Clone()
+	shell:ClearAllChildren()
+	for name in shell:GetAttributes() do
+		shell:SetAttribute(name, nil)
+	end
+	shell.Name = "UpgradedNest"
+	shell.Anchored = true
+	local spot = nest.Part
+	shell.CFrame = spot.CFrame * CFrame.new(0, -spot.Size.Y / 2 + template.Size.Y / 2, 0)
+	shell.Parent = spot.Parent
+	nest.Shell = shell
+end
+
+-- Slot models carry an Unlocked attribute the map (and UI) can read.
+local function setSlotUnlocked(nest, unlocked)
+	local slot = nest.Part.Parent
+	if slot and slot:GetAttribute("SlotIndex") ~= nil then
+		slot:SetAttribute("Unlocked", unlocked)
+	end
 end
 
 local function addPlot(plotModel)
@@ -427,7 +475,7 @@ local function getPenLevel(data)
 	return math.clamp(math.floor(level), 1, #EggConfig.PenLevels)
 end
 
--- The next level this plot can actually use (its pen needs enough Nest parts), or nil.
+-- The next level this plot can actually use (its pen needs enough Nest/NestSpot parts), or nil.
 local function nextLevel(plot, level)
 	local nextInfo = EggConfig.PenLevels[level + 1]
 	if nextInfo and nextInfo.Nests <= #plot.Nests then
@@ -466,6 +514,8 @@ local function applyLevel(plot, level)
 	local unlocked = EggConfig.PenLevels[level].Nests
 	for order, nest in plot.Nests do
 		nest.Unlocked = order <= unlocked
+		setShell(plot, nest)
+		setSlotUnlocked(nest, nest.Unlocked)
 		refreshNest(nest)
 	end
 
@@ -662,6 +712,8 @@ local function releasePlot(player)
 		end
 		nest.Egg = nil
 		nest.Unlocked = false
+		setShell(plot, nest)
+		setSlotUnlocked(nest, not nest.IsSpot)
 	end
 end
 
