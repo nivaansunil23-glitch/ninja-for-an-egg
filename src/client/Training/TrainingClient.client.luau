@@ -300,16 +300,20 @@ local function ripple(position: Vector2)
 	end)
 end
 
--- Signs over the trampolines ("+1 Jump XP" like the video) --------------------------
+-- Sign over your own trampoline ("+1 Jump XP" like the video) ---------------------
+-- Only your trampoline gets one: other plots and the launch trampoline stay
+-- quiet (the launch pad gets explained in the tutorial later), so the screen
+-- isn't full of big labels.
 
 local signs = {} -- [trampoline] = { Gui, Title, Sub }
 
 local function makeSign(titleColor: Color3)
 	local sign = Instance.new("BillboardGui")
 	sign.Name = "TrampolineSign"
-	sign.Size = UDim2.fromOffset(240, 90)
+	-- sized in studs so it shrinks with distance instead of staying big on screen
+	sign.Size = UDim2.fromScale(11, 4)
 	sign.StudsOffset = Vector3.new(0, 7, 0)
-	sign.MaxDistance = 120
+	sign.MaxDistance = 70
 	sign.LightInfluence = 0
 	sign.ResetOnSpawn = false
 	local title = Bubbly.Label({ Name = "Title", Parent = sign, Size = UDim2.fromScale(1, 0.6), Color = titleColor, MaxTextSize = 40, StrokeThickness = 3 })
@@ -346,21 +350,18 @@ local function refreshSigns()
 			local pad = Trampolines.GetPad(trampoline)
 			sign.Gui.Adornee = pad
 			if kind == Trampolines.Launch then
-				sign.Gui.Enabled = pad ~= nil
-				sign.Title.Text = "LAUNCH"
-				sign.Sub.Text = `Jump {JumpBalance.LaunchHeightMultiplier}x higher!`
+				sign.Gui.Enabled = false
+				-- the map's own "LAUNCH!" label too
+				local label = pad and pad:FindFirstChildWhichIsA("BillboardGui")
+				if label then
+					label.Enabled = false
+				end
 			else
 				local own = JumpBalance.Tier(tierFor(trampoline))
-				local owner = Trampolines.OwnerUserId(trampoline)
-				sign.Gui.Enabled = pad ~= nil and session == nil
-				if Trampolines.CanUse(trampoline, player.UserId) then
-					sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
-					sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
-				else
-					local ownerPlayer = owner and owner > 0 and Players:GetPlayerByUserId(owner)
-					sign.Title.Text = if ownerPlayer then `{ownerPlayer.DisplayName}'s Trampoline` else "Empty Plot"
-					sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
-				end
+				local mine = Trampolines.OwnerUserId(trampoline) == player.UserId
+				sign.Gui.Enabled = pad ~= nil and session == nil and mine
+				sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
+				sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
 			end
 		end
 	end
