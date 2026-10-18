@@ -98,6 +98,48 @@ function EggFactory.Build(data)
 	return part
 end
 
+-- A big word that pops up over a spot and floats away ("CRACK!", "SMASH!").
+function EggFactory.PopText(position, text, color)
+	local anchor = Instance.new("Part")
+	anchor.Name = "PopText"
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one * 0.2
+	anchor.Position = position
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(200, 60)
+	gui.LightInfluence = 0
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 120
+	gui.Parent = anchor
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.LuckiestGuy
+	label.Text = text
+	label.TextColor3 = color
+	label.TextStrokeColor3 = Color3.fromRGB(30, 15, 20)
+	label.TextStrokeTransparency = 0
+	label.Rotation = rng:NextNumber(-12, 12)
+	label.Parent = gui
+	anchor.Parent = workspace
+	task.spawn(function()
+		local t = 0
+		while t < 1.1 do
+			t += task.wait()
+			gui.StudsOffset = Vector3.new(0, t * 3, 0)
+			local fade = math.clamp((t - 0.6) / 0.5, 0, 1)
+			label.TextTransparency = fade
+			label.TextStrokeTransparency = fade
+		end
+		anchor:Destroy()
+	end)
+end
+
 -- Updates color and label after cracks change.
 function EggFactory.Refresh(part, data)
 	local egg = EggConfig.Eggs[data.EggId]
@@ -110,9 +152,10 @@ function EggFactory.Refresh(part, data)
 	end
 end
 
--- Shell bits flying out when an egg breaks.
-function EggFactory.BreakEffect(position, color)
-	for _ = 1, 8 do
+-- Shell bits flying out when an egg breaks (count = how many, default 8;
+-- a few for a crack).
+function EggFactory.BreakEffect(position, color, count)
+	for _ = 1, count or 8 do
 		local bit = Instance.new("Part")
 		bit.Name = "EggShell"
 		bit.Size = Vector3.new(0.5, 0.15, 0.5) * rng:NextNumber(0.7, 1.4)

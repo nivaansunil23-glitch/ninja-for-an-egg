@@ -9,6 +9,11 @@
 --   CarryingEgg (EggId), CarryingEggKg, CarryingEggCracks
 -- and can set a "NoFallCrack" attribute (true) on the Player or Character to
 -- skip fall cracks, for example while a jetpack or parachute is active.
+--
+-- A crack knocks you flat for a few seconds (Knockdown) and the egg falls out
+-- of your hands onto the ground beside you, wobbles and cracks ("CRACK!"); only
+-- you can pick it back up for a moment. The crack that breaks it smashes it
+-- into shell bits instead ("SMASH!").
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,10 +22,13 @@ local RunService = game:GetService("RunService")
 local EggConfig = require(ReplicatedStorage.Shared.EggConfig)
 local EggRemotes = require(ReplicatedStorage.Shared.EggRemotes)
 local EggFactory = require(script.Parent.EggFactory)
+local Knockdown = require(script.Parent.Knockdown)
 local JumpBalance = require(ReplicatedStorage.Shared.Config.JumpBalance)
 local CloudConfig = require(ReplicatedStorage.Shared.Config.CloudConfig)
 
 local S = EggConfig.Settings
+local KNOCK_SECONDS = S.CrackKnockSeconds or 4
+local rng = Random.new()
 
 local EggCarry = {}
 
@@ -137,6 +145,9 @@ function trySteal(thief, victim)
 		notify(thief, "Info", { Text = "You're already carrying an egg." })
 		return
 	end
+	if Knockdown.IsDown(thief) then
+		return
+	end
 	local thiefRoot = getAlive(thief)
 	local victimRoot = getAlive(victim)
 	if not thiefRoot or not victimRoot then
@@ -171,7 +182,9 @@ end
 Puts an egg on the ground that anyone can pick up.
 cframe is where the bottom of the egg sits.
 options:
-	Lifetime  seconds before it disappears (nil = stays)
+	Lifetime        seconds before it disappears (nil = stays)
+	OwnerUserId     with ProtectedUntil: only this player can pick it up until then
+	ProtectedUntil  os.clock() time
 Returns the egg part. Listen to part.Destroying to know when it's gone.
 ]]
 function EggCarry.SpawnWorldEgg(data, cframe, options)
@@ -197,6 +210,13 @@ function EggCarry.SpawnWorldEgg(data, cframe, options)
 		end
 		if carried[player] then
 			notify(player, "Info", { Text = "You can only carry one egg at a time." })
+			return
+		end
+		if Knockdown.IsDown(player) then
+			return
+		end
+		if options.ProtectedUntil and os.clock() < options.ProtectedUntil and player.UserId ~= options.OwnerUserId then
+			notify(player, "Info", { Text = "Someone just dropped that egg. Give them a second!" })
 			return
 		end
 		local root = getAlive(player)
@@ -273,6 +293,86 @@ function EggCarry.GiveEgg(player, data)
 	return attach(player, data)
 end
 
+-- Runs fn(alpha) every frame for `seconds`.
+local function animate(seconds, fn)
+	local t = 0
+	while t < seconds do
+		t += task.wait()
+		fn(math.min(t / seconds, 1))
+	end
+end
+
+-- The egg tumbles out of the player's hands onto the ground beside them,
+-- bounces and wobbles, then cracks (and lies there to be picked back up) or smashes.
+local function fallOutOfHands(player, data, from, broken)
+	local egg = EggConfig.Eggs[data.EggId]
+	local root = getAlive(player)
+	local side = if root then root.Position + root.CFrame.RightVector * 3 else from.Position
+	local ignore = { eggFolder }
+	if player.Character then
+		table.insert(ignore, player.Character)
+	end
+	local hit = findGround(side + Vector3.new(0, 3, 0), ignore)
+	if not hit or hit.Position.Y < from.Position.Y - 40 then
+		-- Nothing to land on beside you: it's gone.
+		EggFactory.BreakEffect(from.Position, egg.Color)
+		notify(player, "EggBroke", EggFactory.Info(data))
+		return
+	end
+	local ground = hit.Position
+
+	local display = EggFactory.Build(data)
+	display.Name = "FallingEgg"
+	display.Anchored = true
+	display.CanQuery = false
+	display.CanTouch = false
+	display:SetAttribute("State", "Falling")
+	display.CFrame = from
+	display.Parent = workspace
+	local half = display.Size.Y / 2
+	local landAt = ground + Vector3.new(0, half, 0)
+	local axis = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
+	axis = if axis.Magnitude > 0.1 then axis.Unit else Vector3.xAxis
+
+	-- 1. Tumble out in an arc.
+	local start = from.Position
+	animate(0.5, function(a)
+		local p = start:Lerp(landAt, a) + Vector3.new(0, math.sin(a * math.pi) * 2.5, 0)
+		display.CFrame = CFrame.new(p) * CFrame.fromAxisAngle(axis, a * math.pi * 1.5 * (1 - a))
+	end)
+	-- 2. Land: a little bounce and wobble.
+	animate(0.45, function(a)
+		local hop = math.abs(math.sin(a * math.pi * 2)) * (1 - a) * 0.8
+		local wobble = math.sin(a * math.pi * 5) * 0.35 * (1 - a)
+		display.CFrame = CFrame.new(landAt + Vector3.new(0, hop, 0)) * CFrame.Angles(0, 0, wobble)
+	end)
+
+	if broken then
+		-- 3a. Shakes hard, then smashes.
+		animate(0.35, function(a)
+			display.CFrame = CFrame.new(landAt + Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * 0.15 * a)
+		end)
+		display:Destroy()
+		EggFactory.BreakEffect(landAt, egg.Color, 14)
+		EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "SMASH!", Color3.fromRGB(255, 80, 80))
+		notify(player, "EggBroke", EggFactory.Info(data))
+		return
+	end
+
+	-- 3b. Cracks: a few chips fly off and it stays there for you to grab again.
+	EggFactory.BreakEffect(landAt, egg.Color, 3)
+	EggFactory.PopText(landAt + Vector3.new(0, 2, 0), "CRACK!", Color3.fromRGB(255, 220, 90))
+	display:Destroy()
+	EggCarry.SpawnWorldEgg(data, CFrame.new(ground) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), {
+		Lifetime = S.DroppedEggLifetime,
+		OwnerUserId = player.UserId,
+		ProtectedUntil = os.clock() + KNOCK_SECONDS + 3,
+	})
+	notify(player, "EggCracked", EggFactory.Info(data))
+end
+
+-- Cracks the carried egg: the player is knocked down and the egg falls out
+-- of their hands (see fallOutOfHands). Enough cracks smash it.
 function EggCarry.AddCracks(player, amount)
 	local entry = carried[player]
 	if not entry then
@@ -280,17 +380,11 @@ function EggCarry.AddCracks(player, amount)
 	end
 	local data = entry.Data
 	data.Cracks += amount
-	if data.Cracks >= S.MaxCracks then
-		local position = entry.Part.Position
-		local color = entry.Part.Color
-		detach(player)
-		EggFactory.BreakEffect(position, color)
-		notify(player, "EggBroke", EggFactory.Info(data))
-	else
-		EggFactory.Refresh(entry.Part, data)
-		setCarryAttributes(player, data)
-		notify(player, "EggCracked", EggFactory.Info(data))
-	end
+	local from = entry.Part.CFrame
+	local broken = data.Cracks >= S.MaxCracks
+	detach(player)
+	Knockdown.Fall(player, KNOCK_SECONDS)
+	task.spawn(fallOutOfHands, player, data, from, broken)
 end
 
 -- Cloud steps grow with each gap (60-140 studs near the top), so a normal hop

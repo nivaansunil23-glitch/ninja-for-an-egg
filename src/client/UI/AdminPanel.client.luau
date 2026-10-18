@@ -248,7 +248,7 @@ buttonRow(dayNightCard, rowY(1), {
 
 -- Eggs card: pick any animal's egg with the arrows and get it in your hands,
 -- play its hatch animation right away (only on your screen, nothing saved),
--- or make every egg in your pen ready to hatch.
+-- make every egg in your pen ready to hatch, or crack the egg you're carrying.
 local eggY = dayNightY + dayNightHeight + GAP
 local eggCard, eggHeight = card("EggCard", "Eggs", eggY, 2)
 local eggIndex = 1
@@ -323,6 +323,7 @@ buttonRow(eggCard, rowY(2), {
 		})
 	end },
 	{ "Ready Eggs", Theme.Colors.Orange, function() run("ReadyEggs", 0) end },
+	{ "Crack Egg", Theme.Colors.Red, function() run("CrackEgg", 0) end },
 })
 showEgg()
 

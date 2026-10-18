@@ -1,7 +1,8 @@
 -- Trampoline jump training (like Jump for Phonk / Jump to Steal) and the big
 -- launch trampoline.
 --
--- Training: step onto a trampoline and you start bouncing by yourself. Every
+-- Training: step onto your trampoline, or walk up to it and press the Jump!
+-- prompt (E) to hop on, and you start bouncing by yourself. Every
 -- bounce gives Jump XP, and clicking (tap, Space, or A / R2 on a controller)
 -- while you bounce gives more. XP fills the level bar at the top and every
 -- level adds jump power. Walk away or press STOP to get off.
@@ -479,6 +480,72 @@ local function setUpgradePrompts(enabled: boolean)
 	end
 end
 
+-- Jump prompt: walk up to your own trampoline and press E (or tap the prompt)
+-- to hop up onto it in an arc and start bouncing. Made here, so only you see it.
+local JUMP_PROMPT = "TrampolineJump"
+local HOP_SECONDS = 0.55
+local hopping = false
+local startTraining -- defined below
+
+local function hopOn(trampoline: Instance)
+	local character, humanoid, root = getCharacter()
+	if not character or session or hopping or not Trampolines.CanUse(trampoline, player.UserId) then
+		return
+	end
+	local info = Trampolines.GetPadInfo(trampoline)
+	if not info then
+		return
+	end
+	hopping = true
+	mustLeave = false
+	local from = root.Position
+	local to = Vector3.new(info.Center.X, info.Top + humanoid.HipHeight + root.Size.Y / 2 + 0.2, info.Center.Z)
+	local flatLook = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local facing = if flatLook.Magnitude > 0.1 then flatLook.Unit else root.CFrame.LookVector
+	local peak = math.max(from.Y, to.Y) + 6
+	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	local t = 0
+	while t < HOP_SECONDS and root.Parent do
+		t += RunService.RenderStepped:Wait()
+		local a = math.min(t / HOP_SECONDS, 1)
+		local flat = from:Lerp(to, a)
+		-- up to the peak and down onto the pad
+		local y = (1 - a) ^ 2 * from.Y + 2 * (1 - a) * a * (2 * peak - (from.Y + to.Y) / 2) + a ^ 2 * to.Y
+		root.CFrame = CFrame.lookAt(Vector3.new(flat.X, y, flat.Z), Vector3.new(flat.X, y, flat.Z) + facing)
+		root.AssemblyLinearVelocity = Vector3.zero
+	end
+	hopping = false
+	if root.Parent and not session then
+		startTraining(trampoline, info, humanoid, root)
+		root.AssemblyLinearVelocity = Vector3.new(0, bounceSpeed(), 0)
+	end
+end
+
+local function refreshJumpPrompts()
+	for _, trampoline in Trampolines.GetAll(Trampolines.Training) do
+		local mine = Trampolines.OwnerUserId(trampoline) == player.UserId
+		local pad = Trampolines.GetPad(trampoline)
+		local prompt = pad and pad:FindFirstChild(JUMP_PROMPT)
+		if mine and pad and not prompt then
+			prompt = Instance.new("ProximityPrompt")
+			prompt.Name = JUMP_PROMPT
+			prompt.ActionText = "Jump!"
+			prompt.ObjectText = "Your Trampoline"
+			prompt.KeyboardKeyCode = Enum.KeyCode.E
+			prompt.HoldDuration = 0
+			prompt.MaxActivationDistance = 16
+			prompt.RequiresLineOfSight = false
+			prompt.Triggered:Connect(function()
+				hopOn(trampoline)
+			end)
+			prompt.Parent = pad
+		end
+		if prompt then
+			prompt.Enabled = mine and session == nil and not hopping
+		end
+	end
+end
+
 -- Tricks: a flip or spin in the air on every bounce. Turns the root joint
 -- (LowerTorso.Root on R15, RootJoint on R6), so physics isn't touched.
 local TRICK_AXES = { Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1) }
@@ -532,7 +599,7 @@ end
 
 -- Training --------------------------------------------------------------------
 
-local function startTraining(trampoline: Instance, info, humanoid: Humanoid, root: BasePart)
+function startTraining(trampoline: Instance, info, humanoid: Humanoid, root: BasePart)
 	-- Bounce where you landed, but not right on the edge.
 	local offset = Vector3.new(root.Position.X - info.Center.X, 0, root.Position.Z - info.Center.Z)
 	local maxOffset = info.Radius * 0.5
@@ -547,6 +614,7 @@ local function startTraining(trampoline: Instance, info, humanoid: Humanoid, roo
 	refreshBar()
 	showBar()
 	setUpgradePrompts(false)
+	refreshJumpPrompts()
 	refreshSigns()
 end
 
@@ -562,6 +630,7 @@ local function stopTraining(tellServer: boolean, hopOff: boolean)
 	hint.Visible = false
 	showBar()
 	setUpgradePrompts(true)
+	refreshJumpPrompts()
 	refreshSigns()
 
 	local _, humanoid, root = getCharacter()
@@ -650,7 +719,7 @@ RunService.Heartbeat:Connect(function()
 		mustLeave = false
 		return
 	end
-	if mustLeave or not grounded or humanoid.Sit then
+	if mustLeave or hopping or not grounded or humanoid.Sit then
 		return
 	end
 	startTraining(trampoline, info, humanoid, root)
@@ -737,6 +806,7 @@ task.spawn(function()
 		refreshSigns()
 		refreshSkins()
 		setUpgradePrompts(session == nil) -- plots change owners
+		refreshJumpPrompts()
 		task.wait(REFRESH_SECONDS)
 	end
 end)

@@ -10,6 +10,7 @@
 --   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 --   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
+--   "CrackEgg"   cracks the egg you're carrying (knocks you down, egg falls out)
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
 local Players = game:GetService("Players")
@@ -141,6 +142,12 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 			end
 		end
 		return false, "No island " .. n
+	elseif action == "CrackEgg" then
+		if not EggCarry.IsCarrying(player) then
+			return false, "Carry an egg first (Give Egg)"
+		end
+		EggCarry.AddCracks(player, 1)
+		return true, "Crack!"
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"

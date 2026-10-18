@@ -32,6 +32,7 @@ EggConfig.Settings = {
 	-- of the gap you land in. So normal cloud hops never crack, real falls do.
 	CrackSafeJumps = 1,
 	CrackSafeSteps = 1,
+	CrackKnockSeconds = 4, -- a crack knocks you flat this long and the egg falls out of your hands
 	CrackLuckMultiplier = 0.6, -- each crack multiplies the chance of every non-Common pet by this
 	GroundCheckDistance = 4.5, -- studs below HumanoidRootPart that still count as standing
 
