@@ -29,10 +29,41 @@ local RARITY_ICON = {
 	Secret = "👾",
 }
 
+local STARS = { Epic = 1, Legendary = 2, Secret = 3 }
+
+-- Paint-splash blob behind a pet icon (a few overlapping circles), like the
+-- item grid in Pet Sim 99.
+local function splash(parent: GuiObject, color: Color3)
+	local light = color:Lerp(Color3.new(1, 1, 1), 0.25)
+	for _, blob in {
+		{ 84, 0.5, 40, 1 },
+		{ 34, 0.22, 20, 2 },
+		{ 28, 0.8, 66, 3 },
+		{ 18, 0.84, 14, 4 },
+	} do
+		local circle = Instance.new("Frame")
+		circle.Name = "Splash"
+		circle.BackgroundColor3 = if blob[4] == 1 then color else light
+		circle.BorderSizePixel = 0
+		circle.ZIndex = 0
+		circle.Size = UDim2.fromOffset(blob[1], blob[1])
+		circle.Position = UDim2.new(blob[2], 0, 0, blob[3])
+		circle.AnchorPoint = Vector2.new(0.5, 0.5)
+		Components.Corner(circle, UDim.new(1, 0))
+		circle.Parent = parent
+	end
+end
+
 local InventoryPanel = {}
 
 function InventoryPanel.new(gui: ScreenGui)
-	local window = Components.Window({ Name = "Inventory", Title = "Inventory", Parent = gui, Colors = Theme.Colors.Sky })
+	local window = Components.Window({
+		Name = "Inventory",
+		Title = "Inventory!",
+		Icon = "🎒",
+		Parent = gui,
+		Colors = Theme.Colors.Sky,
+	})
 	local content = window.Content
 	local busy = false
 
@@ -102,22 +133,42 @@ function InventoryPanel.new(gui: ScreenGui)
 		card.Text = ""
 		card.AutoButtonColor = false
 		card.LayoutOrder = order
-		card.BackgroundColor3 = Color3.new(1, 1, 1)
-		Components.Corner(card, UDim.new(0, 18))
-		local stroke = Components.Stroke(card, if pet.Equipped then 5 else 3)
-		if pet.Equipped then
-			stroke.Color = Theme.Colors.Mint[2]
-		end
-		Components.Gradient(card, Theme.FromColor(rarityColor))
+		-- No box: just a color splash behind a big icon.
+		card.BackgroundTransparency = 1
+		splash(card, rarityColor)
+		local scale = Instance.new("UIScale")
+		scale.Parent = card
+		card.MouseEnter:Connect(function()
+			scale.Scale = 1.06
+		end)
+		card.MouseLeave:Connect(function()
+			scale.Scale = 1
+		end)
 
-		Components.Label({
+		local icon = Components.Label({
 			Text = RARITY_ICON[pet.Rarity] or "🐣",
 			Parent = card,
-			Size = UDim2.fromOffset(60, 54),
-			Position = UDim2.new(0.5, 0, 0, 8),
+			Size = UDim2.fromOffset(70, 64),
+			Position = UDim2.new(0.5, 0, 0, 6),
 			AnchorPoint = Vector2.new(0.5, 0),
-			MaxTextSize = 50,
+			MaxTextSize = 60,
+			StrokeThickness = 0,
+			ZIndex = 2,
 		})
+		icon.Rotation = -6
+		if STARS[pet.Rarity] then
+			Components.Label({
+				Name = "Stars",
+				Text = string.rep("⭐", STARS[pet.Rarity]),
+				Parent = card,
+				Size = UDim2.fromOffset(60, 20),
+				Position = UDim2.fromOffset(2, 0),
+				XAlign = Enum.TextXAlignment.Left,
+				MaxTextSize = 18,
+				StrokeThickness = 0,
+				ZIndex = 2,
+			})
+		end
 		Components.Label({
 			Text = pet.Name,
 			Parent = card,

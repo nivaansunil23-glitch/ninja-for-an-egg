@@ -1,6 +1,6 @@
--- Height progress bar along the bottom, like Jump for Phonk: a big height
+-- Height progress bar along the top, like Jump for Phonk: a big height
 -- counter above a green > yellow > orange > red bar, your face riding along it,
--- and a locked "?" bubble for every island that unlocks once you've climbed
+-- and a locked padlock bubble for every island that unlocks once you've climbed
 -- that high (BestHeight) or stood on it (IslandReached).
 -- Islands sit evenly along the bar, so the first ones aren't squashed together.
 
@@ -27,7 +27,7 @@ local BAR_COLORS = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.68, Color3.fromRGB(255, 150, 45)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(240, 60, 70)),
 })
-local LOCKED = { Color3.fromRGB(60, 80, 130), Color3.fromRGB(25, 35, 70) } -- dark navy "?" like Jump for Phonk
+local LOCKED = { Color3.fromRGB(110, 110, 125), Color3.fromRGB(60, 60, 72) } -- dark gray with a padlock, like Pet Sim 99 locked slots
 local UNLOCK_POP = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 local function groundY(): number
@@ -63,8 +63,9 @@ function HeightBar.Build(gui: ScreenGui)
 	holder.Name = "HeightBar"
 	holder.BackgroundTransparency = 1
 	holder.Size = UDim2.fromScale(0.46, 0.13)
-	holder.Position = UDim2.new(0.5, 0, 1, -8)
-	holder.AnchorPoint = Vector2.new(0.5, 1)
+	-- Along the top of the screen (the hotbar has the bottom).
+	holder.Position = UDim2.new(0.5, 0, 0, 6)
+	holder.AnchorPoint = Vector2.new(0.5, 0)
 	holder.Parent = gui
 	local limits = Instance.new("UISizeConstraint")
 	limits.MinSize = Vector2.new(300, 70)
@@ -191,7 +192,7 @@ function HeightBar.Build(gui: ScreenGui)
 	local function styleBubble(entry, unlocked: boolean)
 		local milestone = entry.Milestone
 		Components.SetColors(entry.Bubble, if unlocked then Theme.Colors.Mint else LOCKED)
-		entry.Icon.Text = if unlocked then tostring(milestone.Number) else "?"
+		entry.Icon.Text = if unlocked then tostring(milestone.Number) else "🔒"
 		entry.Name.Text = Format.Short(milestone.Height) .. "m"
 		entry.Unlocked = unlocked
 	end

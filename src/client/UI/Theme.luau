@@ -18,7 +18,7 @@ Theme.Colors = {
 	Purple = { Color3.fromRGB(205, 155, 255), Color3.fromRGB(140, 80, 235) },
 	Red = { Color3.fromRGB(255, 135, 135), Color3.fromRGB(230, 65, 90) },
 	Gray = { Color3.fromRGB(205, 205, 215), Color3.fromRGB(140, 140, 160) },
-	Panel = { Color3.fromRGB(255, 250, 253), Color3.fromRGB(236, 225, 255) },
+	Panel = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(238, 238, 248) },
 	Row = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(242, 234, 255) },
 }
 

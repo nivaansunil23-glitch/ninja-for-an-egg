@@ -85,7 +85,8 @@ function ShopPanel.new(gui: ScreenGui)
 
 	local window = Components.Window({
 		Name = "Shop",
-		Title = "Shop",
+		Title = "Shop!",
+		Icon = "🛒",
 		Parent = gui,
 		Colors = Theme.Colors.Pink,
 		Size = UDim2.fromOffset(780, 500),
@@ -1053,12 +1054,12 @@ function ShopPanel.new(gui: ScreenGui)
 		panel.Context = context
 		if context then
 			local shop = ShopConfig.Shops[id]
-			window.SetTitle(context.Title or shop.Title, context.Colors or shopColors(id))
+			window.SetTitle((context.Title or shop.Title) .. "!", context.Colors or shopColors(id), shop.Icon)
 			tabBar.Visible = false
 			hint.Text = context.Hint or shop.Hint or ""
 			hint.Visible = true
 		else
-			window.SetTitle("Shop", Theme.Colors.Pink)
+			window.SetTitle("Shop!", Theme.Colors.Pink, "🛒")
 			tabBar.Visible = true
 			hint.Visible = false
 		end

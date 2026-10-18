@@ -348,8 +348,43 @@ function Components.Window(props)
 	frame.Visible = false
 	frame.ZIndex = 10
 	Components.Corner(frame, UDim.new(0, 28))
-	Components.Stroke(frame, 5)
+	Components.Stroke(frame, 6)
 	Components.Gradient(frame, Theme.Colors.Panel)
+
+	-- Faint polka-dot pattern on the panel (Pet Sim 99 style), kept inside
+	-- the rounded corners. Tinted to the window's color.
+	local pattern = Instance.new("Frame")
+	pattern.Name = "Pattern"
+	pattern.BackgroundTransparency = 1
+	pattern.ClipsDescendants = true
+	pattern.Size = UDim2.new(1, -36, 1, -36)
+	pattern.Position = UDim2.fromScale(0.5, 0.5)
+	pattern.AnchorPoint = Vector2.new(0.5, 0.5)
+	pattern.ZIndex = frame.ZIndex - 1
+	local dots = Instance.new("UIGridLayout")
+	dots.CellSize = UDim2.fromOffset(12, 12)
+	dots.CellPadding = UDim2.fromOffset(30, 30)
+	dots.Parent = pattern
+	local dotColor = (props.Colors or Theme.Colors.Pink)[2]
+	local size = props.Size or UDim2.fromOffset(720, 470)
+	local count = math.ceil((size.X.Offset - 36) / 42) * math.ceil((size.Y.Offset - 36) / 42)
+	for _ = 1, math.min(count, 400) do
+		local dot = Instance.new("Frame")
+		dot.BackgroundColor3 = dotColor
+		dot.BackgroundTransparency = 0.9
+		dot.BorderSizePixel = 0
+		dot.ZIndex = frame.ZIndex
+		Components.Corner(dot, UDim.new(1, 0))
+		dot.Parent = pattern
+	end
+	pattern.Parent = frame
+	local function tintPattern(color: Color3)
+		for _, dot in pattern:GetChildren() do
+			if dot:IsA("Frame") then
+				dot.BackgroundColor3 = color
+			end
+		end
+	end
 
 	-- Glossy white rim just inside the outline.
 	local rim = Instance.new("Frame")
@@ -376,33 +411,41 @@ function Components.Window(props)
 		return math.min(1.2, viewport.X * 0.94 / frame.Size.X.Offset, viewport.Y * 0.8 / frame.Size.Y.Offset)
 	end
 
-	local ribbon = Components.Box({
-		Name = "Title",
-		Parent = frame,
-		Size = UDim2.fromOffset(300, 60),
-		Position = UDim2.new(0.5, 0, 0, -26),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Colors = props.Colors or Theme.Colors.Pink,
-		CornerRadius = UDim.new(0, 20),
-		StrokeThickness = 4,
-		Lip = true,
-	})
-	Components.Shine(ribbon, 0.35)
+	-- Big white outlined title hanging off the top-left corner, with a large
+	-- icon overlapping the corner (like "Inventory!" in Pet Sim 99).
+	local ribbon = Instance.new("Frame")
+	ribbon.Name = "Title"
+	ribbon.BackgroundTransparency = 1
+	ribbon.Size = UDim2.new(0.75, 0, 0, 70)
+	ribbon.Position = UDim2.fromOffset(62, -40)
+	ribbon.ZIndex = frame.ZIndex + 2
+	ribbon.Parent = frame
 	local title = Components.Label({
 		Text = props.Title,
 		Parent = ribbon,
-		Size = UDim2.fromScale(0.85, 0.66),
-		Position = UDim2.fromScale(0.5, 0.44),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		MaxTextSize = 38,
-		StrokeThickness = 3.5,
+		XAlign = Enum.TextXAlignment.Left,
+		MaxTextSize = 58,
+		StrokeThickness = 5,
+		ZIndex = frame.ZIndex + 2,
 	})
+	local icon = Components.Label({
+		Name = "Icon",
+		Text = props.Icon or "⭐",
+		Parent = frame,
+		Size = UDim2.fromOffset(92, 92),
+		Position = UDim2.fromOffset(-30, -50),
+		MaxTextSize = 80,
+		StrokeThickness = 0,
+		ZIndex = frame.ZIndex + 3,
+	})
+	icon.Rotation = -12
 
 	local content = Instance.new("Frame")
 	content.Name = "Content"
 	content.BackgroundTransparency = 1
 	content.Position = UDim2.fromOffset(20, 50)
 	content.Size = UDim2.new(1, -40, 1, -66)
+	content.ZIndex = frame.ZIndex
 	content.Parent = frame
 
 	local window = {
@@ -412,10 +455,13 @@ function Components.Window(props)
 		Ribbon = ribbon,
 	}
 
-	function window.SetTitle(text: string, colors)
+	function window.SetTitle(text: string, colors, iconText: string?)
 		title.Text = text
 		if colors then
-			Components.SetColors(ribbon, colors)
+			tintPattern(colors[2])
+		end
+		if iconText then
+			icon.Text = iconText
 		end
 	end
 
@@ -445,17 +491,20 @@ function Components.Window(props)
 		return frame.Visible
 	end
 
+	-- Square red close button with a white X, on the top-right corner.
 	Components.Button({
 		Name = "Close",
 		Text = "X",
 		Parent = frame,
-		Size = UDim2.fromOffset(58, 58),
-		Position = UDim2.new(1, 16, 0, -16),
+		Size = UDim2.fromOffset(62, 62),
+		Position = UDim2.new(1, 18, 0, -18),
 		AnchorPoint = Vector2.new(1, 0),
 		Colors = Theme.Colors.Red,
-		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 4,
-		MaxTextSize = 36,
+		CornerRadius = UDim.new(0, 16),
+		StrokeThickness = 5,
+		MaxTextSize = 40,
+		TextStroke = 3.5,
+		ZIndex = frame.ZIndex + 2,
 		OnClick = window.Close,
 	})
 

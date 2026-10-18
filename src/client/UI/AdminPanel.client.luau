@@ -28,7 +28,8 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 local window = Components.Window({
 	Name = "Admin",
-	Title = "Admin Panel",
+	Title = "Admin!",
+	Icon = "⚙️",
 	Parent = gui,
 	Size = UDim2.fromOffset(520, 400),
 	Colors = Theme.Colors.Purple,
