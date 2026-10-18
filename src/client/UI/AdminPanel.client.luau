@@ -1,6 +1,6 @@
 -- Admin panel for the game owner (server checks it: server/Player/Admin).
 -- A small gear button on the right (or press F4) opens a window to give yourself
--- jump levels or money, test day/night and get any animal's egg. Only shows up when the server marks you "IsAdmin".
+-- jump levels or money, test day/night, get any animal's egg and teleport to islands. Only shows up when the server marks you "IsAdmin".
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,7 +36,20 @@ local window = Components.Window({
 	Size = UDim2.fromOffset(540, 740),
 	Colors = Theme.Colors.Purple,
 })
-local content = window.Content
+-- The cards scroll inside the window so it stays a sensible size.
+local content = Instance.new("ScrollingFrame")
+content.Name = "Cards"
+content.BackgroundTransparency = 1
+content.BorderSizePixel = 0
+content.Size = UDim2.fromScale(1, 1)
+content.CanvasSize = UDim2.new()
+content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+content.ScrollingDirection = Enum.ScrollingDirection.Y
+content.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+content.ScrollBarThickness = 8
+content.ScrollBarImageColor3 = Theme.PanelOutline
+content.ZIndex = 10
+content.Parent = window.Content
 
 local busy = false
 local function run(action: string, amount: number)
@@ -236,7 +249,8 @@ buttonRow(dayNightCard, rowY(1), {
 -- Eggs card: pick any animal's egg with the arrows and get it in your hands,
 -- play its hatch animation right away (only on your screen, nothing saved),
 -- or make every egg in your pen ready to hatch.
-local eggCard = card("EggCard", "Eggs", dayNightY + dayNightHeight + GAP, 2)
+local eggY = dayNightY + dayNightHeight + GAP
+local eggCard, eggHeight = card("EggCard", "Eggs", eggY, 2)
 local eggIndex = 1
 local eggName = Components.Label({
 	Name = "EggName",
@@ -311,6 +325,14 @@ buttonRow(eggCard, rowY(2), {
 	{ "Ready Eggs", Theme.Colors.Orange, function() run("ReadyEggs", 0) end },
 })
 showEgg()
+
+-- Teleport card: jump to the base (your pen) or straight onto any island.
+local teleportCard = card("TeleportCard", "Teleport", eggY + eggHeight + GAP, 1)
+local teleportButtons = { { "Base", Theme.Colors.Mint, function() run("Teleport", 0) end } }
+for n = 1, 8 do
+	table.insert(teleportButtons, { tostring(n), Theme.Colors.Sky, function() run("Teleport", n) end })
+end
+buttonRow(teleportCard, rowY(1), teleportButtons)
 
 -- Small gear button on the right edge, under the HUD's Pets button.
 local adminButton = Components.Button({

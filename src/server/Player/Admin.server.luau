@@ -10,6 +10,7 @@
 --   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 --   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
+--   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -116,6 +117,30 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 			return false, "Can't carry an egg right now"
 		end
 		return true, "Got a " .. egg.DisplayName
+	elseif action == "Teleport" then
+		local n = math.floor(amount)
+		if n == 0 then
+			return PenService.SendHome(player), "Back at your pen"
+		end
+		local character = player.Character
+		local islands = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Islands")
+		if not character or not islands then
+			return false, "Can't teleport right now"
+		end
+		for _, island in islands:GetChildren() do
+			if island:GetAttribute("IslandNumber") == n then
+				local spot = island:FindFirstChild("LandingSpot", true) or island:FindFirstChild("Center")
+				local at = if spot and spot:IsA("BasePart") then spot.Position else island:GetPivot().Position
+				player:SetAttribute("NoFallCrack", true) -- don't crack a carried egg on arrival
+				character:PivotTo(CFrame.new(at + Vector3.new(0, 5, 0)))
+				task.delay(1, function()
+					player:SetAttribute("NoFallCrack", nil)
+				end)
+				local name = island:GetAttribute("IslandId") or island.Name
+				return true, "Teleported to " .. tostring(name):gsub("(%l)(%u)", "%1 %2")
+			end
+		end
+		return false, "No island " .. n
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"
