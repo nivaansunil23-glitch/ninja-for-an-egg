@@ -6,6 +6,8 @@
 --   "AddLevels"  amount = jump levels to add
 --   "SetLevel"   amount = jump level to set (1..MaxLevel)
 --   "AddMoney"   amount = money to add
+--   "ForceDay", "ForceNight", "SkipPhase"   day/night (World/DayNightCycle)
+--   "ResetEggs"  clear every island's eggs and spawn a fresh set (none at night)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,6 +18,10 @@ local Net = require(Shared:WaitForChild("Net"))
 local JumpBalance = require(Shared:WaitForChild("Config"):WaitForChild("JumpBalance"))
 local PlayerData = require(script.Parent:WaitForChild("PlayerData"))
 local JumpPower = require(script.Parent:WaitForChild("JumpPower"))
+local Server = script.Parent.Parent
+local DayNightConfig = require(Shared:WaitForChild("Config"):WaitForChild("DayNightConfig"))
+local DayNightCycle = require(Server:WaitForChild("World"):WaitForChild("DayNightCycle"))
+local EggSpawner = require(Server:WaitForChild("Eggs"):WaitForChild("EggSpawner"))
 
 local MAX_MONEY_PER_CLICK = 1e12
 
@@ -78,6 +84,19 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		amount = math.clamp(math.floor(amount), 0, MAX_MONEY_PER_CLICK)
 		PlayerData.AddMoney(player, amount)
 		return true, "Added money"
+	elseif action == "ForceDay" then
+		DayNightCycle.SetPhase(false)
+		return true, "It's day"
+	elseif action == "ForceNight" then
+		DayNightCycle.SetPhase(true)
+		return true, "It's night"
+	elseif action == "SkipPhase" then
+		DayNightCycle.Skip()
+		return true, if DayNightConfig.IsNight() then "Skipped to night" else "Skipped to day"
+	elseif action == "ResetEggs" then
+		EggSpawner.ClearAll()
+		EggSpawner.FillAll()
+		return true, if DayNightConfig.IsNight() then "Eggs cleared (new ones come at day)" else "Eggs reset"
 	end
 	return false, "Unknown action"
 end

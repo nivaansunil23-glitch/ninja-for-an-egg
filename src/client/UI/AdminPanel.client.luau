@@ -1,6 +1,6 @@
 -- Admin panel for the game owner (server checks it: server/Player/Admin).
 -- A small gear button on the right (or press F4) opens a window to give yourself
--- jump levels or money. Only shows up when the server marks you "IsAdmin".
+-- jump levels or money, and to test day/night. Only shows up when the server marks you "IsAdmin".
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,7 +32,7 @@ local window = Components.Window({
 	Title = "Admin",
 	Icon = "Gear",
 	Parent = gui,
-	Size = UDim2.fromOffset(540, 440),
+	Size = UDim2.fromOffset(540, 560),
 	Colors = Theme.Colors.Purple,
 })
 local content = window.Content
@@ -54,7 +54,7 @@ local function run(action: string, amount: number)
 	end
 end
 
--- Layout (pixels inside the window's content area, which is 504 x 342).
+-- Layout (pixels inside the window's content area, which is 504 x 462).
 local GAP = 12
 local CARD_PAD = 12
 local HEADER_H = 26
@@ -214,11 +214,21 @@ Components.Button({
 })
 
 -- Money card.
-local moneyCard = card("MoneyCard", "Money", jumpY + jumpHeight + GAP, 1)
+local moneyY = jumpY + jumpHeight + GAP
+local moneyCard, moneyHeight = card("MoneyCard", "Money", moneyY, 1)
 buttonRow(moneyCard, rowY(1), {
 	{ "+1K", Theme.Colors.Yellow, function() run("AddMoney", 1e3) end },
 	{ "+1M", Theme.Colors.Yellow, function() run("AddMoney", 1e6) end },
 	{ "+1B", Theme.Colors.Orange, function() run("AddMoney", 1e9) end },
+})
+
+-- Day/night card: force a phase, skip to the next one, or reset island eggs.
+local dayNightCard = card("DayNightCard", "Day / Night", moneyY + moneyHeight + GAP, 1)
+buttonRow(dayNightCard, rowY(1), {
+	{ "Force Day", Theme.Colors.Sky, function() run("ForceDay", 0) end },
+	{ "Force Night", Theme.Colors.Purple, function() run("ForceNight", 0) end },
+	{ "Skip Phase", Theme.Colors.Mint, function() run("SkipPhase", 0) end },
+	{ "Reset Eggs", Theme.Colors.Orange, function() run("ResetEggs", 0) end },
 })
 
 -- Small gear button on the right edge, under the HUD's Pets button.
