@@ -613,10 +613,59 @@ local function planZone(zone: BasePart, gapNumber: number, rng: Random, keepOut)
 		end
 	end
 
+	-- 4. Rescue clouds scattered all over the zone, so someone knocked off an
+	-- island (the guardian's fling) or who misses a jump can land somewhere and
+	-- climb back. Half crowd around and under the island above (where you fall
+	-- from), the rest go anywhere in the box.
+	local rescueWanted = math.floor(#main * CloudConfig.RescueRatio + 0.5)
+	local rescueCenter, rescueRadius = nil, 0
+	if toIsland then
+		rescueCenter = islandCenter(toIsland)
+		local size = if toIsland:IsA("Model") then toIsland:GetExtentsSize() else Vector3.new(120, 0, 120)
+		rescueRadius = math.max(size.X, size.Z) / 2
+	end
+	local rescued, rescueTries = 0, 0
+	while rescued < rescueWanted and rescueTries < rescueWanted * 12 do
+		rescueTries += 1
+		local cloud = newCloud()
+		local y, x, z
+		if rescueCenter and rng:NextNumber() < CloudConfig.RescueNearIsland then
+			local angle = rng:NextNumber(0, math.pi * 2)
+			local distance = rescueRadius * rng:NextNumber(0.3, 1) + rng:NextNumber(0, CloudConfig.RescueRing)
+			x = rescueCenter.X + math.cos(angle) * distance
+			z = rescueCenter.Z + math.sin(angle) * distance
+			-- Mostly in the top half of the gap, where a fall starts.
+			y = toTop - (toTop - fromTop) * rng:NextNumber() ^ 1.6 - 8
+		else
+			local localPos = Vector3.new(
+				(rng:NextNumber() - 0.5) * boxSize.X,
+				0,
+				(rng:NextNumber() - 0.5) * boxSize.Z
+			)
+			local world = boxCFrame:PointToWorldSpace(localPos)
+			x, z = world.X, world.Z
+			y = rng:NextNumber(fromTop + stepMin, toTop - 8)
+		end
+		cloud.Pos = Vector3.new(x, y, z)
+		if
+			cloud.Pos.Y - cloud.Thickness > fromTop + 0.5
+			and inBox(cloud)
+			and apart(cloud, all)
+			and clear(cloud)
+		then
+			cloud.Side = true
+			table.insert(all, cloud)
+			rescued += 1
+		end
+		if rescueTries % 20 == 0 then
+			task.wait()
+		end
+	end
+
 	return {
 		Clouds = all,
 		PathCount = #main + 1,
-		Branches = branches,
+		Branches = branches + rescued,
 		Jump = jump,
 		ToIsland = toIsland,
 		First = main[1] or final,

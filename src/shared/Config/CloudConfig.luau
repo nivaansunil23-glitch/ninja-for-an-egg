@@ -51,6 +51,14 @@ CloudConfig.RiseSkew = 1.4
 CloudConfig.SizeJitterMin = 0.7
 CloudConfig.SizeJitterMax = 1.4
 
+-- Rescue clouds: extra clouds all over each gap so you can save yourself after
+-- the guardian flings you off an island. RescueRatio per climb cloud;
+-- RescueNearIsland of them crowd around/under the island above, out to
+-- RescueRing studs past its edge.
+CloudConfig.RescueRatio = 2.5
+CloudConfig.RescueNearIsland = 0.5
+CloudConfig.RescueRing = 60
+
 -- Smooth flat colours, no textures.
 CloudConfig.Color = Color3.fromRGB(248, 249, 255)
 CloudConfig.PuffColor = Color3.fromRGB(232, 237, 250)

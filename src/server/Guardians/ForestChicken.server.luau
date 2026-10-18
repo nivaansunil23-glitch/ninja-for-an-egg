@@ -4,6 +4,9 @@
     • sleeps on its pad (squats, eyes shut, floating Z's)
     • someone takes an egg from its island → wakes up angry and chases them
       while they carry the egg and stay near its pad
+    • if it catches them it flings them off the island, up and out then
+      falling, so they have to save themselves on the clouds (the egg cracks
+      from the fall like any other drop)
     • then walks back to its pad and falls asleep again
   It stands at the part named "ChickenSpawn" (in Map.Islands.Island1.Guardian);
   that part's GuardsIsland attribute says whose eggs it guards. DAMAGE is 0.
@@ -19,6 +22,11 @@ local CFG = {
 	LEASH = 90,         -- gives up when the thief is this far from its pad
 	DAMAGE = 0,         -- set >0 to make pecks hurt
 	PECK_COOLDOWN = 1,
+	CATCH_DIST = 4.5,   -- this close to the thief = caught
+	FLING_OUT = 85,     -- sideways speed away from the island's middle
+	FLING_UP = 45,      -- small hop up before they fall
+	FLING_TIME = 0.35,  -- seconds the fling push lasts
+	STUN_TIME = 1.2,    -- seconds they tumble (PlatformStand) after the fling
 }
 
 local Players = game:GetService("Players")
@@ -32,6 +40,17 @@ while not spawnMarker do
 end
 local home = spawnMarker.Position
 local guards = spawnMarker:GetAttribute("GuardsIsland") or CFG.GUARDS
+
+-- Middle of the guarded island, so a fling always throws you off its edge.
+local islandMiddle = home
+do
+	local island = spawnMarker.Parent
+	while island and island.Parent and island.Parent.Name ~= "Islands" do
+		island = island.Parent
+	end
+	local center = island and island:FindFirstChild("Center")
+	if center and center:IsA("BasePart") then islandMiddle = center.Position end
+end
 
 local model = Instance.new("Model")
 model.Name = "ForestChicken"
@@ -181,6 +200,33 @@ local function thiefTarget()
 	return { hrp = hrp, hum = hum }
 end
 
+-- Caught! Throw them out past the island's edge. The character is owned by
+-- the player's client, so the push is a LinearVelocity on their root part
+-- (constraints replicate) and PlatformStand makes them tumble.
+local function fling(target)
+	local hrp, hum = target.hrp, target.hum
+	local out = flat(hrp.Position - islandMiddle)
+	out = out.Magnitude > 0.1 and out.Unit or Vector3.xAxis
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "ChickenFling"
+	attachment.Parent = hrp
+	local push = Instance.new("LinearVelocity")
+	push.Name = "ChickenFling"
+	push.Attachment0 = attachment
+	push.RelativeTo = Enum.ActuatorRelativeTo.World
+	push.MaxForce = math.huge
+	push.VectorVelocity = out * CFG.FLING_OUT + Vector3.new(0, CFG.FLING_UP, 0)
+	push.Parent = hrp
+	hum.PlatformStand = true
+	task.delay(CFG.FLING_TIME, function()
+		push:Destroy()
+		attachment:Destroy()
+	end)
+	task.delay(CFG.STUN_TIME, function()
+		if hum.Parent then hum.PlatformStand = false end
+	end)
+end
+
 -- state
 local pos = home
 local heading = 0
@@ -211,8 +257,11 @@ RunService.Heartbeat:Connect(function(dt)
 	if mode == "run" then
 		local d = target.hrp.Position - pos
 		heading = angLerp(heading, math.atan2(d.X, d.Z), 1 - math.exp(-8 * dt))
-		want = dist > CFG.STOP_DIST and CFG.SPEED or 0
-		if CFG.DAMAGE > 0 and dist <= CFG.STOP_DIST + 1 and t - lastPeck > CFG.PECK_COOLDOWN then
+		want = CFG.SPEED
+		if dist <= CFG.CATCH_DIST then
+			fling(target)
+			thief = nil
+		elseif CFG.DAMAGE > 0 and dist <= CFG.STOP_DIST + 1 and t - lastPeck > CFG.PECK_COOLDOWN then
 			lastPeck = t
 			target.hum:TakeDamage(CFG.DAMAGE)
 		end
