@@ -1,20 +1,22 @@
 --[[
-  Base guardian: the blocky chicken (the user's ChickenScript). Builds the
-  chicken from smooth Parts and animates it:
-    • no player within SLEEP_DIST  → sleeps (squats, eyes shut, floating Z's)
-    • player within SLEEP_DIST     → idle (looks around, pecks)
-    • player within CHASE_DIST     → angry eyebrows, runs at the nearest player
-  It stands at the part named "ChickenSpawn" in Workspace (at the base).
-  DAMAGE is 0, so it only chases.
+  Forest Island guardian: the blocky chicken (the user's ChickenScript).
+  Builds the chicken from smooth Parts and animates it:
+    • sleeps on its pad (squats, eyes shut, floating Z's)
+    • someone takes an egg from its island → wakes up angry and chases them
+      while they carry the egg and stay near its pad
+    • then walks back to its pad and falls asleep again
+  It stands at the part named "ChickenSpawn" (in Map.Islands.Island1.Guardian);
+  that part's GuardsIsland attribute says whose eggs it guards. DAMAGE is 0.
 ]]
 
 local CFG = {
 	SCALE = 4,          -- studs per model unit (4 ≈ 3.5-stud-tall chicken)
-	SLEEP_DIST = 70,
-	CHASE_DIST = 35,
+	GUARDS = "Forest",  -- island id whose eggs it guards (ChickenSpawn's GuardsIsland wins)
+	THIEF_DIST = 20,    -- how close to the egg the player who took it must be
 	STOP_DIST = 5,
 	SPEED = 16,         -- studs/sec (player walk speed is 16)
-	LEASH = 120,        -- max distance from spawn
+	HOME_SPEED = 8,     -- waddling back to its pad
+	LEASH = 90,         -- gives up when the thief is this far from its pad
 	DAMAGE = 0,         -- set >0 to make pecks hurt
 	PECK_COOLDOWN = 1,
 }
@@ -23,11 +25,16 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local S = CFG.SCALE
 
-local spawnMarker = workspace:WaitForChild("ChickenSpawn", 10)
-local home = spawnMarker and spawnMarker.Position or Vector3.new(0, 0, 0)
+local spawnMarker = workspace:FindFirstChild("ChickenSpawn", true)
+while not spawnMarker do
+	task.wait(1)
+	spawnMarker = workspace:FindFirstChild("ChickenSpawn", true)
+end
+local home = spawnMarker.Position
+local guards = spawnMarker:GetAttribute("GuardsIsland") or CFG.GUARDS
 
 local model = Instance.new("Model")
-model.Name = "BaseChicken"
+model.Name = "ForestChicken"
 
 local COL = {
 	feather = Color3.fromRGB(246, 243, 234),
@@ -130,18 +137,48 @@ end
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function nearestPlayer(from)
-	local best, bestD
-	for _, plr in ipairs(Players:GetPlayers()) do
-		local char = plr.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
-		if hrp and hum and hum.Health > 0 then
-			local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(from.X, 0, from.Z)).Magnitude
-			if not bestD or d < bestD then best, bestD = { hrp = hrp, hum = hum }, d end
-		end
+local function flat(v) return Vector3.new(v.X, 0, v.Z) end
+
+-- The player who took an egg from the guarded island. World eggs live in
+-- Workspace.Eggs with an Island attribute; picking one up destroys it and puts
+-- CarryingEgg on the player who took it.
+local thief = nil
+local function watchEgg(egg)
+	task.defer(function()
+		if not egg:IsA("BasePart") or egg:GetAttribute("Island") ~= guards then return end
+		egg.Destroying:Connect(function()
+			local at = egg.Position
+			task.defer(function()
+				local best, bestD
+				for _, plr in ipairs(Players:GetPlayers()) do
+					local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+					if hrp and plr:GetAttribute("CarryingEgg") then
+						local d = (hrp.Position - at).Magnitude
+						if d < CFG.THIEF_DIST and (not bestD or d < bestD) then best, bestD = plr, d end
+					end
+				end
+				if best then thief = best end
+			end)
+		end)
+	end)
+end
+task.spawn(function()
+	local eggs = workspace:WaitForChild("Eggs")
+	for _, egg in ipairs(eggs:GetChildren()) do watchEgg(egg) end
+	eggs.ChildAdded:Connect(watchEgg)
+end)
+
+local function thiefTarget()
+	if not thief then return nil end
+	local char = thief.Parent and thief.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hrp or not hum or hum.Health <= 0 or not thief:GetAttribute("CarryingEgg")
+		or flat(hrp.Position - home).Magnitude > CFG.LEASH then
+		thief = nil
+		return nil
 	end
-	return best, bestD
+	return { hrp = hrp, hum = hum }
 end
 
 -- state
@@ -155,16 +192,19 @@ RunService.Heartbeat:Connect(function(dt)
 	dt = math.min(dt, 0.05)
 	t += dt
 
-	-- pick behaviour
-	local target, dist = nearestPlayer(pos)
-	if target and dist < CFG.CHASE_DIST and (pos - home).Magnitude < CFG.LEASH then
+	-- pick behaviour: chase the egg thief, else waddle home, else sleep
+	local target = thiefTarget()
+	local dist = target and flat(target.hrp.Position - pos).Magnitude
+	local toHome = flat(home - pos)
+	if target then
 		mode = "run"
-	elseif target and dist < CFG.SLEEP_DIST then
-		mode = "idle"
+	elseif toHome.Magnitude > 1.5 then
+		mode = "home"
 	else
 		mode = "sleep"
 	end
-	for k in pairs(W) do W[k] = lerp(W[k], k == mode and 1 or 0, 1 - math.exp(-5 * dt)) end
+	local animMode = mode == "home" and "run" or mode
+	for k in pairs(W) do W[k] = lerp(W[k], k == animMode and 1 or 0, 1 - math.exp(-5 * dt)) end
 
 	-- movement
 	local want = 0
@@ -176,28 +216,36 @@ RunService.Heartbeat:Connect(function(dt)
 			lastPeck = t
 			target.hum:TakeDamage(CFG.DAMAGE)
 		end
-	elseif mode == "idle" and target then
-		local d = target.hrp.Position - pos
-		heading = angLerp(heading, math.atan2(d.X, d.Z), 1 - math.exp(-1.5 * dt))
+	elseif mode == "home" then
+		heading = angLerp(heading, math.atan2(toHome.X, toHome.Z), 1 - math.exp(-6 * dt))
+		want = CFG.HOME_SPEED
 	end
 	speed = lerp(speed, want, 1 - math.exp(-6 * dt))
+	local before = pos
 	pos += Vector3.new(math.sin(heading), 0, math.cos(heading)) * speed * dt
 
-	-- stick to the ground
+	-- stick to the ground, and never walk off the island's edge
 	local exclude = { model }
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr.Character then table.insert(exclude, plr.Character) end
 	end
+	local eggs = workspace:FindFirstChild("Eggs")
+	if eggs then table.insert(exclude, eggs) end
 	rayParams.FilterDescendantsInstances = exclude
-	local hit = workspace:Raycast(pos + Vector3.new(0, 8, 0), Vector3.new(0, -60, 0), rayParams)
-	if hit then pos = Vector3.new(pos.X, lerp(pos.Y, hit.Position.Y, 1 - math.exp(-20 * dt)), pos.Z) end
+	local hit = workspace:Raycast(pos + Vector3.new(0, 8, 0), Vector3.new(0, -30, 0), rayParams)
+	if hit then
+		pos = Vector3.new(pos.X, lerp(pos.Y, hit.Position.Y, 1 - math.exp(-20 * dt)), pos.Z)
+	else
+		pos = before
+		speed = 0
+	end
 
 	-- pose (same curves as the web preview)
 	local run, sl, id = W.run, W.sleep, W.idle
 	local stride = math.min(1, speed / CFG.SPEED)
 	phase += dt * (6 + 12 * stride) * (run > 0.3 and 1 or 0.3)
 	local s = math.sin(phase)
-	local angry = run * (1 - stride)
+	local angry = (mode == "run" and run or 0) * (1 - stride)
 	local breath = math.sin(t * 1.6)
 	local drop = -0.185 * sl
 	local bob = math.abs(math.cos(phase)) * 0.05 * run * stride + angry * math.abs(math.sin(t * 14)) * 0.04
@@ -227,7 +275,7 @@ RunService.Heartbeat:Connect(function(dt)
 
 	setVisible(eyesOpen, sl < 0.5)
 	setVisible(eyesShut, sl >= 0.5)
-	setVisible(brows, run > 0.5)
+	setVisible(brows, mode == "run" and run > 0.5)
 
 	for i, z in ipairs(zLabels) do
 		local u = (t * 0.35 + (i - 1) / 3) % 1
