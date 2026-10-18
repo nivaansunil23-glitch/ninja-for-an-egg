@@ -21,6 +21,18 @@ local SellConfig = require(Config:WaitForChild("SellConfig"))
 local ShopConfig = require(Config:WaitForChild("ShopConfig"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local Icons = require(script.Parent:WaitForChild("Icons"))
+
+-- Drawn icons for each shop and gear item (instead of their emoji).
+local SHOP_ICONS = { Gear = "Gear", Sell = "Cash", Vertex = "Shoe" }
+local function gearIcon(gear): string
+	if gear.Fuel then
+		return "Rocket"
+	elseif gear.JumpMultiplier then
+		return "Shoe"
+	end
+	return "Star"
+end
 local ClientState = require(script.Parent:WaitForChild("ClientState"))
 
 local player = Players.LocalPlayer
@@ -42,14 +54,14 @@ local function shopColors(id: string)
 end
 
 local function powerText(entry): string
-	return `⬆️ {VertexConfig.PerkText(entry)}`
+	return `{VertexConfig.PerkText(entry)}`
 end
 
 local function gearStat(gear): string?
 	if gear.JumpMultiplier then
-		return `⬆️ +{math.floor((gear.JumpMultiplier - 1) * 100 + 0.5)}% Jump`
+		return `+{math.floor((gear.JumpMultiplier - 1) * 100 + 0.5)}% Jump`
 	elseif gear.Fuel then
-		return `⛽ {gear.Fuel}s of flight`
+		return `{gear.Fuel}s of flight`
 	end
 	return nil
 end
@@ -85,8 +97,8 @@ function ShopPanel.new(gui: ScreenGui)
 
 	local window = Components.Window({
 		Name = "Shop",
-		Title = "Shop!",
-		Icon = "🛒",
+		Title = "Shop",
+		Icon = "Cart",
 		Parent = gui,
 		Colors = Theme.Colors.Pink,
 		Size = UDim2.fromOffset(780, 500),
@@ -160,7 +172,6 @@ function ShopPanel.new(gui: ScreenGui)
 		Position = UDim2.new(0, 6, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		XAlign = Enum.TextXAlignment.Left,
-		Color = Theme.DarkText,
 		StrokeThickness = 0,
 		MaxTextSize = 22,
 	})
@@ -178,7 +189,7 @@ function ShopPanel.new(gui: ScreenGui)
 	})
 	Components.Shine(moneyPill, 0.35)
 	local moneyLabel = Components.Label({
-		Text = "💰 $0",
+		Text = "$0",
 		Parent = moneyPill,
 		Size = UDim2.fromScale(0.84, 0.66),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -186,7 +197,7 @@ function ShopPanel.new(gui: ScreenGui)
 		MaxTextSize = 28,
 	})
 	local function updateMoney()
-		moneyLabel.Text = "💰 " .. Format.Money(money())
+		moneyLabel.Text = Format.Money(money())
 	end
 	updateMoney()
 
@@ -229,7 +240,7 @@ function ShopPanel.new(gui: ScreenGui)
 		local shop = ShopConfig.Shops[tab.Id]
 		tabButtons[tab.Id] = Components.Button({
 			Name = tab.Id,
-			Text = `{shop.Icon} {tab.Text}`,
+			Text = tab.Text,
 			Parent = tabBar,
 			Size = UDim2.fromOffset(162, 44),
 			Colors = shopColors(tab.Id),
@@ -277,15 +288,12 @@ function ShopPanel.new(gui: ScreenGui)
 				StrokeThickness = 3,
 			})
 			Components.Shine(tile)
-			local icon = Components.Label({
+			local icon = Icons.Make(gearIcon(gear), tile, {
 				Name = "Icon",
-				Text = gear.Icon,
-				Parent = tile,
-				Size = UDim2.fromOffset(92, 92),
+				Size = UDim2.fromOffset(84, 84),
 				Position = UDim2.fromScale(0.5, 0.5),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				MaxTextSize = 84,
-				StrokeThickness = 0,
+				ZIndex = 2,
 			})
 			table.insert(wobblers, icon)
 			if gear.Rarity then
@@ -390,14 +398,14 @@ function ShopPanel.new(gui: ScreenGui)
 			for gearId, entry in cards do
 				local price = entry.Gear.Price
 				if owned[gearId] then
-					entry.Label.Text = "✔ Owned"
+					entry.Label.Text = "Owned"
 					Components.SetColors(entry.Button, Theme.Colors.Mint)
 					entry.StockLabel.Text = "YOURS!"
 					Components.SetColors(entry.Stock, Theme.Colors.Sky)
 					entry.Note.Text = "In your hotbar"
 					entry.Note.TextColor3 = Theme.DarkText
 				else
-					entry.Label.Text = "💰 " .. Format.Money(price)
+					entry.Label.Text = Format.Money(price)
 					entry.StockLabel.Text = "IN STOCK"
 					Components.SetColors(entry.Stock, Theme.Colors.Mint)
 					if cash >= price then
@@ -599,11 +607,11 @@ function ShopPanel.new(gui: ScreenGui)
 			bannerPower.Text = powerText(current)
 			if nextEntry then
 				nextLabel.Text = `Next: {nextEntry.Name}`
-				upgradeLabel.Text = "⬆️ " .. Format.Money(nextEntry.Price)
+				upgradeLabel.Text = Format.Money(nextEntry.Price)
 				Components.SetColors(upgradeButton, if cash >= nextEntry.Price then Theme.Colors.Yellow else Theme.Colors.Red)
 			else
 				nextLabel.Text = "You have the best vertex!"
-				upgradeLabel.Text = "✨ Maxed"
+				upgradeLabel.Text = "Maxed"
 				Components.SetColors(upgradeButton, Theme.Colors.Purple)
 			end
 
@@ -618,7 +626,7 @@ function ShopPanel.new(gui: ScreenGui)
 					card.Stroke.Thickness = if tier == owned or tier == owned + 1 then 5 else 4
 				end
 				if tier == owned then
-					card.Label.Text = "✔ Equipped"
+					card.Label.Text = "Equipped"
 					Components.SetColors(card.Button, Theme.Colors.Mint)
 				elseif tier < owned then
 					card.Label.Text = "Owned"
@@ -627,7 +635,7 @@ function ShopPanel.new(gui: ScreenGui)
 					card.Label.Text = Format.Money(price)
 					Components.SetColors(card.Button, if cash >= price then Theme.Colors.Yellow else Theme.Colors.Red)
 				else
-					card.Label.Text = "🔒 " .. Format.Money(price)
+					card.Label.Text = Format.Money(price)
 					Components.SetColors(card.Button, Theme.Colors.Gray)
 				end
 			end
@@ -855,14 +863,12 @@ function ShopPanel.new(gui: ScreenGui)
 			local cardScale = Instance.new("UIScale")
 			cardScale.Parent = card
 
-			Components.Label({
-				Text = Theme.RarityIcon[pet.Rarity] or "🐣",
-				Parent = card,
-				Size = UDim2.fromOffset(58, 50),
+			Icons.Make("Paw", card, {
+				Size = UDim2.fromOffset(50, 50),
 				Position = UDim2.new(0.5, 0, 0, 8),
 				AnchorPoint = Vector2.new(0.5, 0),
-				MaxTextSize = 46,
-				StrokeThickness = 0,
+				Color = Color3.new(1, 1, 1),
+				ZIndex = 2,
 			})
 			Components.Label({
 				Text = pet.Name,
@@ -890,7 +896,7 @@ function ShopPanel.new(gui: ScreenGui)
 				MaxTextSize = 20,
 			})
 			local check = Components.Tag({
-				Text = "✔",
+				Text = "",
 				Parent = card,
 				Size = UDim2.fromOffset(32, 32),
 				Position = UDim2.new(1, 6, 0, -6),
@@ -898,6 +904,12 @@ function ShopPanel.new(gui: ScreenGui)
 				Colors = Theme.Colors.Mint,
 				MaxTextSize = 20,
 				ZIndex = 3,
+			})
+			Icons.Make("Check", check, {
+				Size = UDim2.fromOffset(24, 24),
+				Position = UDim2.fromScale(0.5, 0.5),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				ZIndex = 4,
 			})
 
 			local function style()
@@ -962,9 +974,9 @@ function ShopPanel.new(gui: ScreenGui)
 				if layout then
 					layout.CellSize = UDim2.new(1, -16, 0, 130)
 				end
-				local message = if next(pets) then "No pets here to sell." else "🥚 No pets yet! Grab an egg from the islands and hatch it."
+				local message = if next(pets) then "No pets here to sell." else "No pets yet! Grab an egg from the islands and hatch it."
 				if hiddenEquipped > 0 then
-					message ..= `\n🔒 {equippedText}. Unequip them in your Inventory to sell them.`
+					message ..= `\n{equippedText}. Unequip them in your Inventory to sell them.`
 				end
 				local holder = Instance.new("Frame")
 				holder.Name = "Empty"
@@ -974,8 +986,7 @@ function ShopPanel.new(gui: ScreenGui)
 					Text = message,
 					Parent = holder,
 					Wrapped = true,
-					Color = Theme.DarkText,
-					StrokeThickness = 0,
+					StrokeThickness = 2.5,
 					MaxTextSize = 24,
 				})
 			else
@@ -992,14 +1003,11 @@ function ShopPanel.new(gui: ScreenGui)
 						StrokeThickness = 3,
 						LayoutOrder = 100000,
 					})
-					Components.Label({
-						Text = "🔒",
-						Parent = card,
-						Size = UDim2.fromOffset(50, 46),
+					Icons.Make("Lock", card, {
+						Size = UDim2.fromOffset(46, 46),
 						Position = UDim2.new(0.5, 0, 0, 12),
 						AnchorPoint = Vector2.new(0.5, 0),
-						MaxTextSize = 40,
-						StrokeThickness = 0,
+						ZIndex = 2,
 					})
 					Components.Label({
 						Text = equippedText .. " (unequip to sell)",
@@ -1054,12 +1062,12 @@ function ShopPanel.new(gui: ScreenGui)
 		panel.Context = context
 		if context then
 			local shop = ShopConfig.Shops[id]
-			window.SetTitle((context.Title or shop.Title) .. "!", context.Colors or shopColors(id), shop.Icon)
+			window.SetTitle(context.Title or shop.Title, context.Colors or shopColors(id), SHOP_ICONS[id] or "Cart")
 			tabBar.Visible = false
 			hint.Text = context.Hint or shop.Hint or ""
 			hint.Visible = true
 		else
-			window.SetTitle("Shop!", Theme.Colors.Pink, "🛒")
+			window.SetTitle("Shop", Theme.Colors.Pink, "Cart")
 			tabBar.Visible = true
 			hint.Visible = false
 		end

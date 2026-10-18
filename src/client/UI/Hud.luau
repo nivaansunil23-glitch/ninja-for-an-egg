@@ -1,8 +1,9 @@
--- Always-on HUD, Pet Simulator 99 style:
---   * money and jump on the left side: a big icon with bold outlined numbers
---   * a hotbar of big chunky icon buttons (no boxes) along the bottom middle
+-- Always-on HUD, Steal an Egg style. It stays visible around open windows.
+--   * left middle: wide Shop and Index buttons (icon + label)
+--   * right middle: square orange Pets button with a pet-count badge
+--   * bottom left: jump power and money in big outlined numbers with icons
 --   * the height bar along the top (HeightBar) and the jetpack fuel bar
--- The hotbar moves up out of the way when Roblox's tool bar is showing.
+-- All icons are drawn by Icons (no emoji).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,153 +14,154 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local Icons = require(script.Parent:WaitForChild("Icons"))
 local HeightBar = require(script.Parent:WaitForChild("HeightBar"))
+local ClientState = require(script.Parent:WaitForChild("ClientState"))
 
 local player = Players.LocalPlayer
 
 local Hud = {}
 
-local BOUNCE = TweenInfo.new(0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-local SLIDE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local MONEY_GREEN = Color3.fromRGB(120, 255, 110)
+local JUMP_BLUE = Color3.fromRGB(130, 220, 255)
+local ORANGE = { Color3.fromRGB(255, 190, 80), Color3.fromRGB(245, 130, 30) }
+local CYAN = { Color3.fromRGB(120, 235, 255), Color3.fromRGB(30, 180, 230) }
+local GREEN = { Color3.fromRGB(130, 240, 110), Color3.fromRGB(50, 190, 70) }
 
--- Big icon with a bold number next to it, e.g. 💰 1.2K.
-local function makeCounter(parent: Instance, icon: string, color: Color3, order: number)
-	local row = Instance.new("Frame")
-	row.Name = "Counter"
-	row.BackgroundTransparency = 1
-	row.Size = UDim2.new(1, 0, 0, 62)
-	row.LayoutOrder = order
-	row.Parent = parent
-
-	local iconLabel = Components.Label({
-		Name = "Icon",
-		Text = icon,
-		Parent = row,
-		Size = UDim2.fromOffset(62, 62),
-		MaxTextSize = 56,
-		StrokeThickness = 0,
-	})
-	iconLabel.Rotation = -8
-	local value = Components.Label({
-		Name = "Value",
-		Text = "0",
-		Parent = row,
-		Size = UDim2.new(1, -70, 0, 46),
-		Position = UDim2.new(0, 68, 0.5, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
-		XAlign = Enum.TextXAlignment.Left,
-		Color = color,
-		MaxTextSize = 44,
-		StrokeThickness = 4,
-	})
-	return row, value
-end
-
--- Hotbar button: a big icon with no box, its name underneath, and a red
--- notification badge (hidden until SetBadge).
-local function makeHotbarButton(parent: Instance, icon: string, text: string, order: number, onClick)
-	local button = Instance.new("TextButton")
-	button.Name = text
-	button.Text = ""
-	button.AutoButtonColor = false
-	button.BackgroundTransparency = 1
-	button.Size = UDim2.fromOffset(86, 92)
-	button.LayoutOrder = order
-	button.Parent = parent
-	local scale = Instance.new("UIScale")
-	scale.Parent = button
-
-	local iconLabel = Components.Label({
-		Name = "Icon",
-		Text = icon,
-		Parent = button,
-		Size = UDim2.fromOffset(72, 72),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		AnchorPoint = Vector2.new(0.5, 0),
-		MaxTextSize = 64,
-		StrokeThickness = 0,
-	})
-	Components.Label({
-		Name = "Name",
-		Text = text,
-		Parent = button,
-		Size = UDim2.new(1, 8, 0, 26),
-		Position = UDim2.new(0.5, 0, 1, 0),
-		AnchorPoint = Vector2.new(0.5, 1),
-		MaxTextSize = 22,
-		StrokeThickness = 3,
-	})
-
-	local badge = Components.Box({
+-- Small red circle with a number, top-right of a button. Returns a setter.
+local function badge(parent: GuiObject)
+	local circle = Components.Box({
 		Name = "Badge",
-		Parent = button,
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.new(1, -6, 0, 0),
+		Parent = parent,
+		Size = UDim2.fromOffset(30, 30),
+		Position = UDim2.new(1, 8, 0, -8),
 		AnchorPoint = Vector2.new(1, 0),
 		Colors = Theme.Colors.Red,
 		CornerRadius = UDim.new(1, 0),
 		StrokeThickness = 3,
-		ZIndex = 3,
+		ZIndex = 5,
 	})
-	badge.Visible = false
-	local badgeText = Components.Label({
-		Text = "!",
-		Parent = badge,
+	circle.Visible = false
+	local text = Components.Label({
+		Text = "",
+		Parent = circle,
 		Size = UDim2.fromScale(0.7, 0.7),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 20,
-		ZIndex = 3,
+		ZIndex = 5,
 	})
-
-	button.MouseEnter:Connect(function()
-		TweenService:Create(scale, BOUNCE, { Scale = 1.1 }):Play()
-		TweenService:Create(iconLabel, BOUNCE, { Rotation = -8 }):Play()
-	end)
-	button.MouseLeave:Connect(function()
-		TweenService:Create(scale, BOUNCE, { Scale = 1 }):Play()
-		TweenService:Create(iconLabel, BOUNCE, { Rotation = 0 }):Play()
-	end)
-	button.MouseButton1Down:Connect(function()
-		TweenService:Create(scale, BOUNCE, { Scale = 0.88 }):Play()
-	end)
-	button.MouseButton1Up:Connect(function()
-		TweenService:Create(scale, BOUNCE, { Scale = 1 }):Play()
-	end)
-	button.Activated:Connect(function()
-		Components.Burst(button:FindFirstAncestorOfClass("ScreenGui"), Components.CenterOf(iconLabel), { "✨", "⭐" })
-		onClick()
-	end)
-
-	local entry = { Button = button }
-	function entry.SetBadge(value)
-		badge.Visible = value ~= nil and value ~= 0 and value ~= false
-		badgeText.Text = if type(value) == "number" then tostring(value) else "!"
+	return function(count: number)
+		circle.Visible = count > 0
+		text.Text = if count > 99 then "99+" else tostring(count)
 	end
-	return entry
 end
 
--- Floating "+$123" that drifts up from the money counter.
-local function popMoney(row: GuiObject, amount: number)
-	local gui = row:FindFirstAncestorOfClass("ScreenGui")
-	if not gui then
-		return
-	end
-	local at = row.AbsolutePosition
+-- Wide left-side button: drawn icon on the left, outlined label.
+local function wideButton(parent: Instance, iconName: string, text: string, colors, order: number, onClick)
+	local button, label = Components.Button({
+		Name = text,
+		Text = text,
+		Parent = parent,
+		Size = UDim2.fromOffset(190, 62),
+		Colors = colors,
+		CornerRadius = UDim.new(0, 14),
+		StrokeThickness = 4,
+		LayoutOrder = order,
+		LabelSize = UDim2.new(1, -78, 0.6, 0),
+		LabelPosition = UDim2.new(0.5, 30, 0.45, 0),
+		MaxTextSize = 32,
+		TextStroke = 3,
+		OnClick = onClick,
+	})
+	label.Font = Theme.TitleFont
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	Icons.Make(iconName, button, {
+		Size = UDim2.fromOffset(56, 56),
+		Position = UDim2.new(0, -6, 0.5, -2),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Rotation = -8,
+		ZIndex = 3,
+	})
+	return button
+end
+
+-- Square right-side button with a big drawn icon and a small label.
+local function squareButton(parent: Instance, iconName: string, text: string, order: number, onClick)
+	local button, label = Components.Button({
+		Name = text,
+		Text = text,
+		Parent = parent,
+		Size = UDim2.fromOffset(84, 84),
+		Colors = ORANGE,
+		CornerRadius = UDim.new(0, 16),
+		StrokeThickness = 4,
+		LayoutOrder = order,
+		LabelSize = UDim2.new(1, -8, 0, 22),
+		LabelPosition = UDim2.new(0.5, 0, 1, -16),
+		MaxTextSize = 20,
+		TextStroke = 3,
+		OnClick = onClick,
+	})
+	label.Font = Theme.TitleFont
+	Icons.Make(iconName, button, {
+		Size = UDim2.fromOffset(56, 56),
+		Position = UDim2.new(0.5, 0, 0, 4),
+		AnchorPoint = Vector2.new(0.5, 0),
+		ZIndex = 3,
+	})
+	return button
+end
+
+-- Big icon with a big outlined number next to it.
+local function stat(parent: Instance, iconName: string, color: Color3, order: number, textSize: number)
+	local row = Instance.new("Frame")
+	row.Name = iconName .. "Stat"
+	row.BackgroundTransparency = 1
+	row.Size = UDim2.new(1, 0, 0, textSize + 12)
+	row.LayoutOrder = order
+	row.Parent = parent
+	Icons.Make(iconName, row, {
+		Size = UDim2.fromOffset(textSize + 12, textSize + 12),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Rotation = -10,
+		ZIndex = 2,
+	})
+	local value = Components.Label({
+		Name = "Value",
+		Text = "0",
+		Parent = row,
+		Size = UDim2.new(1, -(textSize + 20), 0, textSize),
+		Position = UDim2.new(0, textSize + 18, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		XAlign = Enum.TextXAlignment.Left,
+		Color = color,
+		MaxTextSize = textSize,
+		StrokeThickness = 4,
+	})
+	value.Font = Theme.TitleFont
+	return row, value
+end
+
+-- Floating "+$123" that drifts up from the money number.
+local function popMoney(gui: ScreenGui, value: GuiObject, amount: number)
+	local at = value.AbsolutePosition
 	local label = Components.Label({
 		Text = "+" .. Format.Money(amount),
 		Parent = gui,
-		Color = Theme.Colors.Mint[1],
-		Size = UDim2.fromOffset(180, 34),
-		Position = UDim2.fromOffset(at.X + 68, at.Y - 6),
+		Color = MONEY_GREEN,
+		Size = UDim2.fromOffset(200, 36),
+		Position = UDim2.fromOffset(at.X, at.Y - 40),
 		XAlign = Enum.TextXAlignment.Left,
-		MaxTextSize = 32,
+		MaxTextSize = 34,
 		StrokeThickness = 3.5,
 		ZIndex = 5,
 	})
+	label.Font = Theme.TitleFont
 	local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(label, info, {
-		Position = label.Position - UDim2.fromOffset(0, 40),
+		Position = label.Position - UDim2.fromOffset(0, 50),
 		TextTransparency = 1,
 	}):Play()
 	local stroke = label:FindFirstChildOfClass("UIStroke")
@@ -176,7 +178,7 @@ local function buildFuelBar(parent: Instance)
 	holder.Name = "JetpackFuel"
 	holder.BackgroundTransparency = 1
 	holder.Size = UDim2.fromOffset(260, 28)
-	holder.Position = UDim2.new(0.5, 0, 1, -190)
+	holder.Position = UDim2.new(0.5, 0, 1, -150)
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
 	holder.Visible = false
 	holder.Parent = parent
@@ -184,32 +186,29 @@ local function buildFuelBar(parent: Instance)
 	local track = Components.Box({
 		Name = "Track",
 		Parent = holder,
-		Colors = { Color3.fromRGB(80, 65, 120), Color3.fromRGB(50, 35, 85) },
-		CornerRadius = UDim.new(1, 0),
+		Colors = { Color3.fromRGB(26, 30, 56), Color3.fromRGB(18, 20, 40) },
+		CornerRadius = UDim.new(0, 10),
 		StrokeThickness = 4,
 	})
 	local fill = Components.Box({
 		Name = "Fill",
 		Parent = track,
 		Colors = Theme.Colors.Orange,
-		CornerRadius = UDim.new(1, 0),
+		CornerRadius = UDim.new(0, 8),
 		StrokeThickness = 0,
 	})
 	Components.Shine(fill, 0.4)
-	Components.Label({
-		Text = "🚀",
-		Parent = holder,
-		Size = UDim2.fromOffset(52, 52),
-		Position = UDim2.new(0, -14, 0.5, 0),
+	Icons.Make("Rocket", holder, {
+		Size = UDim2.fromOffset(50, 50),
+		Position = UDim2.new(0, -10, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		MaxTextSize = 44,
-		StrokeThickness = 0,
+		Rotation = 20,
 		ZIndex = 3,
 	})
 	local percent = Components.Label({
 		Text = "Fuel",
 		Parent = track,
-		Size = UDim2.fromScale(0.6, 0.85),
+		Size = UDim2.fromScale(0.6, 0.8),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		MaxTextSize = 20,
@@ -221,58 +220,101 @@ local function buildFuelBar(parent: Instance)
 		holder.Visible = equipped
 		if equipped then
 			local amount = math.clamp(player:GetAttribute("JetpackFuel") or 0, 0, 1)
-			fill.Size = UDim2.fromScale(math.max(amount, 0.06), 1)
+			fill.Size = UDim2.fromScale(math.max(amount, 0.05), 1)
 			fill.Visible = amount > 0
 			percent.Text = string.format("Fuel %d%%", math.floor(amount * 100 + 0.5))
 		end
 	end)
 end
 
--- True while Roblox's own tool bar is on screen (the player owns a tool).
-local function hasTools(): boolean
-	local backpack = player:FindFirstChildOfClass("Backpack")
-	if backpack and backpack:FindFirstChildOfClass("Tool") then
-		return true
-	end
-	local character = player.Character
-	return character ~= nil and character:FindFirstChildOfClass("Tool") ~= nil
-end
-
--- actions = { Shop = fn, Pets = fn, Inventory = fn }
+-- actions = { Shop = fn, Index = fn, Inventory = fn, IndexReady = fn -> number }
 function Hud.Build(gui: ScreenGui, actions)
-	-- Money and jump, left middle.
+	local scales = {}
+	local function fitted(frame: GuiObject)
+		local scale = Instance.new("UIScale")
+		scale.Parent = frame
+		table.insert(scales, scale)
+	end
+
+	-- Left: Shop and Index.
+	local left = Instance.new("Frame")
+	left.Name = "LeftButtons"
+	left.BackgroundTransparency = 1
+	left.Size = UDim2.fromOffset(200, 150)
+	left.Position = UDim2.new(0, 14, 0.42, 0)
+	left.AnchorPoint = Vector2.new(0, 0.5)
+	left.Parent = gui
+	local leftLayout = Instance.new("UIListLayout")
+	leftLayout.Padding = UDim.new(0, 14)
+	leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	leftLayout.Parent = left
+	fitted(left)
+
+	wideButton(left, "Cart", "Shop", GREEN, 1, actions.Shop)
+	local indexButton = wideButton(left, "Book", "Index", CYAN, 2, actions.Index)
+	local setIndexBadge = badge(indexButton)
+
+	-- Right: Pets.
+	local right = Instance.new("Frame")
+	right.Name = "RightButtons"
+	right.BackgroundTransparency = 1
+	right.Size = UDim2.fromOffset(90, 200)
+	right.Position = UDim2.new(1, -14, 0.42, 0)
+	right.AnchorPoint = Vector2.new(1, 0.5)
+	right.Parent = gui
+	local rightLayout = Instance.new("UIListLayout")
+	rightLayout.Padding = UDim.new(0, 14)
+	rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rightLayout.Parent = right
+	fitted(right)
+
+	local petsButton = squareButton(right, "Paw", "Pets", 1, actions.Inventory)
+	local setPetBadge = badge(petsButton)
+
+	local function updateBadges()
+		local pets = ClientState.Data and ClientState.Data.Pets or {}
+		local count = 0
+		for _ in pets do
+			count += 1
+		end
+		setPetBadge(count)
+		setIndexBadge(if actions.IndexReady then actions.IndexReady() else 0)
+	end
+	ClientState.Changed:Connect(updateBadges)
+	updateBadges()
+
+	-- Bottom left: jump and money.
 	local stats = Instance.new("Frame")
 	stats.Name = "Stats"
 	stats.BackgroundTransparency = 1
-	stats.Size = UDim2.fromOffset(260, 190)
-	stats.Position = UDim2.new(0, 16, 0.42, 0)
-	stats.AnchorPoint = Vector2.new(0, 0.5)
+	stats.Size = UDim2.fromOffset(330, 150)
+	stats.Position = UDim2.new(0, 16, 1, -14)
+	stats.AnchorPoint = Vector2.new(0, 1)
 	stats.Parent = gui
 	local statsLayout = Instance.new("UIListLayout")
 	statsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	statsLayout.Padding = UDim.new(0, 4)
+	statsLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	statsLayout.Padding = UDim.new(0, 0)
 	statsLayout.Parent = stats
+	fitted(stats)
 
-	local moneyRow, moneyValue = makeCounter(stats, "💰", Theme.Colors.Yellow[1], 1)
+	local _, jumpValue = stat(stats, "Shoe", JUMP_BLUE, 1, 34)
+	local _, moneyValue = stat(stats, "Cash", MONEY_GREEN, 2, 48)
 	local incomeLabel = Components.Label({
 		Name = "Income",
 		Text = "",
 		Parent = stats,
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 24),
 		XAlign = Enum.TextXAlignment.Left,
-		Color = Theme.Colors.Mint[1],
-		MaxTextSize = 24,
+		Color = MONEY_GREEN,
+		MaxTextSize = 22,
 		StrokeThickness = 3,
-		LayoutOrder = 2,
+		LayoutOrder = 3,
 	})
 	local incomePad = Instance.new("UIPadding")
-	incomePad.PaddingLeft = UDim.new(0, 70)
+	incomePad.PaddingLeft = UDim.new(0, 68)
 	incomePad.Parent = incomeLabel
-	local _, jumpValue = makeCounter(stats, "⬆️", Theme.Colors.Sky[1], 3)
-
-	-- Phones: shrink the counters on small screens.
-	local statsScale = Instance.new("UIScale")
-	statsScale.Parent = stats
 
 	local lastMoney = player:GetAttribute("Money")
 	local function updateMoney()
@@ -282,8 +324,8 @@ function Hud.Build(gui: ScreenGui, actions)
 			local gained = money - lastMoney
 			-- Skip the every-second pet income so it doesn't spam the screen.
 			if gained ~= player:GetAttribute("Income") then
-				popMoney(moneyRow, gained)
-				Components.Pop(moneyValue, 1.18)
+				popMoney(gui, moneyValue, gained)
+				Components.Pop(moneyValue, 1.15)
 			end
 		end
 		lastMoney = money
@@ -291,7 +333,7 @@ function Hud.Build(gui: ScreenGui, actions)
 
 	local function updateJump()
 		jumpValue.Text = tostring(player:GetAttribute("JumpPower") or 50) .. " Jump"
-		Components.Pop(jumpValue, 1.15)
+		Components.Pop(jumpValue, 1.12)
 	end
 
 	local function updateIncome()
@@ -306,51 +348,16 @@ function Hud.Build(gui: ScreenGui, actions)
 	updateJump()
 	updateIncome()
 
-	-- Hotbar, bottom middle.
-	local hotbar = Instance.new("Frame")
-	hotbar.Name = "Hotbar"
-	hotbar.BackgroundTransparency = 1
-	hotbar.AutomaticSize = Enum.AutomaticSize.X
-	hotbar.Size = UDim2.fromOffset(0, 92)
-	hotbar.Position = UDim2.new(0.5, 0, 1, -10)
-	hotbar.AnchorPoint = Vector2.new(0.5, 1)
-	hotbar.Parent = gui
-	local hotbarLayout = Instance.new("UIListLayout")
-	hotbarLayout.FillDirection = Enum.FillDirection.Horizontal
-	hotbarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	hotbarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	hotbarLayout.Padding = UDim.new(0, 14)
-	hotbarLayout.Parent = hotbar
-	local hotbarScale = Instance.new("UIScale")
-	hotbarScale.Parent = hotbar
-
-	makeHotbarButton(hotbar, "🎒", "Items", 1, actions.Inventory)
-	makeHotbarButton(hotbar, "🛒", "Shop", 2, actions.Shop)
-	makeHotbarButton(hotbar, "🐾", "Pets", 3, actions.Pets)
-
+	-- Shrink everything a bit on small (phone) screens.
 	local function fit()
 		local size = gui.AbsoluteSize
-		local s = math.clamp(math.min(size.X / 1100, size.Y / 700), 0.65, 1.1)
-		statsScale.Scale = s
-		hotbarScale.Scale = s
+		local s = math.clamp(math.min(size.X / 1200, size.Y / 720), 0.6, 1.1)
+		for _, scale in scales do
+			scale.Scale = s
+		end
 	end
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	fit()
-
-	-- Move up above Roblox's tool bar while it's showing.
-	local raised = nil
-	task.spawn(function()
-		while hotbar.Parent do
-			local want = hasTools()
-			if want ~= raised then
-				raised = want
-				TweenService:Create(hotbar, SLIDE, {
-					Position = UDim2.new(0.5, 0, 1, if want then -78 else -10),
-				}):Play()
-			end
-			task.wait(0.5)
-		end
-	end)
 
 	HeightBar.Build(gui)
 	buildFuelBar(gui)

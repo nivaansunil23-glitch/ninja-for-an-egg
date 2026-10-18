@@ -33,6 +33,8 @@ local TEMPLATE = {
 	IslandReached = 0, -- highest island stood on (0 = base)
 	Gear = {}, -- [gearId] = true
 	Pets = {}, -- [petId] = { Name, Rarity, Weight, Egg, Value, Equipped }
+	Index = {}, -- [petName] = true once you've ever owned that pet (Pet Index)
+	IndexClaimed = {}, -- [eggId] = true once that egg's Index reward is claimed
 	Eggs = {}, -- free space for the egg systems (pens, growing eggs)
 	Stats = {
 		PetsSold = 0,
@@ -109,6 +111,8 @@ local function snapshot(data)
 		IslandReached = data.IslandReached,
 		Gear = data.Gear,
 		Pets = data.Pets,
+		Index = data.Index,
+		IndexClaimed = data.IndexClaimed,
 	}
 end
 
@@ -208,6 +212,12 @@ local function load(player: Player)
 		data.Money = PlayerConfig.StartingMoney
 	end
 	reconcile(data, TEMPLATE)
+	-- Pets owned before the Index existed count as found.
+	for _, pet in data.Pets do
+		if type(pet) == "table" and pet.Name then
+			data.Index[pet.Name] = true
+		end
+	end
 
 	if player.Parent ~= Players then
 		return
@@ -294,6 +304,7 @@ function PlayerData.AddPet(player: Player, pet): string?
 
 	local id = HttpService:GenerateGUID(false)
 	session.Data.Pets[id] = entry
+	session.Data.Index[entry.Name] = true
 	PlayerData.MarkDirty(player)
 	return id
 end

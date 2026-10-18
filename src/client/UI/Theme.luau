@@ -3,6 +3,10 @@
 local Theme = {}
 
 Theme.Font = Enum.Font.FredokaOne
+-- Extra chunky font for window titles and big numbers (Steal an Egg style).
+Theme.TitleFont = Enum.Font.LuckiestGuy
+-- Near-black outline around dark panels.
+Theme.PanelOutline = Color3.fromRGB(14, 16, 32)
 Theme.Outline = Color3.fromRGB(45, 25, 70)
 Theme.Text = Color3.fromRGB(255, 255, 255)
 -- Small text on light panels (descriptions, dialogue) that reads without an outline.
@@ -20,16 +24,10 @@ Theme.Colors = {
 	Gray = { Color3.fromRGB(205, 205, 215), Color3.fromRGB(140, 140, 160) },
 	Panel = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(238, 238, 248) },
 	Row = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(242, 234, 255) },
-}
-
--- Placeholder pet art until pet models/icons exist.
-Theme.RarityIcon = {
-	Common = "🐣",
-	Uncommon = "🐥",
-	Rare = "🐾",
-	Epic = "🦄",
-	Legendary = "🐉",
-	Secret = "👾",
+	-- Steal an Egg style windows.
+	Navy = { Color3.fromRGB(52, 62, 104), Color3.fromRGB(30, 36, 68) },
+	NavyCard = { Color3.fromRGB(70, 82, 130), Color3.fromRGB(44, 52, 92) },
+	TitleBlue = { Color3.fromRGB(140, 220, 255), Color3.fromRGB(65, 160, 245) },
 }
 
 -- Soft drop shadow under panels and buttons.

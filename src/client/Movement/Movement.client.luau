@@ -18,6 +18,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
 local MovementConfig = require(Shared:WaitForChild("Config"):WaitForChild("MovementConfig"))
 local Bubbly = require(script.Parent.Parent:WaitForChild("Common"):WaitForChild("Bubbly"))
+local Icons = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("Icons"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -51,7 +52,7 @@ screen.Parent = gui
 
 local sprintButton = Bubbly.Button({
 	Name = "Sprint",
-	Text = "🏃",
+	Text = "",
 	Parent = screen,
 	Size = UDim2.fromOffset(84, 84),
 	Colors = Bubbly.Colors.Sky,
@@ -60,6 +61,12 @@ local sprintButton = Bubbly.Button({
 	LabelSize = UDim2.fromScale(0.62, 0.5),
 	LabelPosition = UDim2.fromScale(0.5, 0.38),
 	MaxTextSize = 48,
+})
+Icons.Make("Shoe", sprintButton, {
+	Size = UDim2.fromOffset(48, 48),
+	Position = UDim2.fromScale(0.5, 0.4),
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	ZIndex = 3,
 })
 local sprintLabel = Bubbly.Label({
 	Text = "Sprint",

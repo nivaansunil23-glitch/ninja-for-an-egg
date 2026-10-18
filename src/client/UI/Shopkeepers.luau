@@ -181,7 +181,7 @@ end
 
 local function keyText(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInputType): string
 	if inputType == Enum.ProximityPromptInputType.Touch then
-		return "👆"
+		return "Tap"
 	elseif inputType == Enum.ProximityPromptInputType.Gamepad then
 		return (string.gsub(prompt.GamepadKeyCode.Name, "^Button", ""))
 	end
@@ -238,7 +238,7 @@ local function buildPrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPro
 		MaxTextSize = 28,
 	})
 	Components.Label({
-		Text = "💬 " .. prompt.ActionText,
+		Text = prompt.ActionText,
 		Parent = button,
 		Size = UDim2.new(1, -66, 0.6, 0),
 		Position = UDim2.new(0, 56, 0.5, 0),

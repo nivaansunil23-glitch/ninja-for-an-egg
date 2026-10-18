@@ -1,6 +1,6 @@
 -- Height progress bar along the top, like Jump for Phonk: a big height
 -- counter above a green > yellow > orange > red bar, your face riding along it,
--- and a locked padlock bubble for every island that unlocks once you've climbed
+-- and a locked "?" bubble for every island that unlocks once you've climbed
 -- that high (BestHeight) or stood on it (IslandReached).
 -- Islands sit evenly along the bar, so the first ones aren't squashed together.
 
@@ -102,7 +102,7 @@ function HeightBar.Build(gui: ScreenGui)
 	local bestPlate = plate("BestPlate", UDim2.fromScale(0.22, 0.28), UDim2.fromScale(0, 0.1), Vector2.zero, Theme.Colors.Yellow[2])
 	local bestLabel = Components.Label({
 		Name = "Best",
-		Text = "🏆 0m",
+		Text = "Best 0m",
 		Parent = bestPlate,
 		Size = UDim2.fromScale(0.84, 0.78),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -192,7 +192,7 @@ function HeightBar.Build(gui: ScreenGui)
 	local function styleBubble(entry, unlocked: boolean)
 		local milestone = entry.Milestone
 		Components.SetColors(entry.Bubble, if unlocked then Theme.Colors.Mint else LOCKED)
-		entry.Icon.Text = if unlocked then tostring(milestone.Number) else "🔒"
+		entry.Icon.Text = if unlocked then tostring(milestone.Number) else "?"
 		entry.Name.Text = Format.Short(milestone.Height) .. "m"
 		entry.Unlocked = unlocked
 	end
@@ -270,8 +270,8 @@ function HeightBar.Build(gui: ScreenGui)
 				scale.Scale = 0.2
 				scale.Parent = entry.Bubble
 				TweenService:Create(scale, UNLOCK_POP, { Scale = 1 }):Play()
-				Components.Burst(gui, Components.CenterOf(entry.Bubble), { "⭐", "✨", "🎉" })
-				Components.Notify(gui, "🏝️ " .. entry.Milestone.Name .. " unlocked!", Theme.Colors.Mint[1])
+				Components.Burst(gui, Components.CenterOf(entry.Bubble))
+				Components.Notify(gui, entry.Milestone.Name .. " unlocked!", Theme.Colors.Mint[1])
 			elseif not unlocked and entry.Unlocked then
 				styleBubble(entry, false)
 			end
@@ -294,7 +294,7 @@ function HeightBar.Build(gui: ScreenGui)
 			entry.Name.Visible = entry.Milestone == milestone
 		end
 		if not milestone then
-			nextLabel.Text = "👑 Top reached!"
+			nextLabel.Text = "Top reached!"
 			nextLabel.TextColor3 = Theme.Colors.Yellow[1]
 			return
 		end
@@ -341,7 +341,7 @@ function HeightBar.Build(gui: ScreenGui)
 			shownHeight = height
 			heightLabel.Text = Format.Short(height) .. "m"
 		end
-		bestLabel.Text = "🏆 " .. Format.Short(best) .. "m"
+		bestLabel.Text = "Best " .. Format.Short(best) .. "m"
 	end)
 
 	return holder

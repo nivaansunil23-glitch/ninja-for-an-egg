@@ -244,26 +244,29 @@ function Components.Tag(props)
 	return tag, label
 end
 
--- A few sparkles that fly out from a point on the screen and fade away.
-function Components.Burst(gui: LayerCollector, at: Vector2, icons: { string }?)
-	icons = icons or { "✨", "⭐", "💫" }
+-- A few drawn stars that fly out from a point on the screen and shrink away.
+-- The third argument (old emoji list) is ignored.
+local STAR_COLORS = {
+	Color3.fromRGB(255, 215, 60),
+	Color3.fromRGB(255, 255, 255),
+	Color3.fromRGB(130, 230, 255),
+}
+function Components.Burst(gui: LayerCollector, at: Vector2, _icons)
+	local Icons = require(script.Parent:WaitForChild("Icons"))
 	for i = 1, 7 do
 		local angle = (i / 7) * math.pi * 2 + math.random() * 0.6
 		local distance = math.random(60, 110)
-		local spark = Components.Label({
-			Text = icons[math.random(#icons)],
-			Parent = gui,
-			Size = UDim2.fromOffset(30, 30),
+		local spark = Icons.Make("Star", gui, {
+			Size = UDim2.fromOffset(28, 28),
 			Position = UDim2.fromOffset(at.X, at.Y),
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			MaxTextSize = 30,
-			StrokeThickness = 0,
+			Color = STAR_COLORS[math.random(#STAR_COLORS)],
 			ZIndex = 60,
 		})
 		local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		TweenService:Create(spark, info, {
 			Position = UDim2.fromOffset(at.X + math.cos(angle) * distance, at.Y + math.sin(angle) * distance),
-			TextTransparency = 1,
+			Size = UDim2.fromOffset(6, 6),
 			Rotation = math.random(-90, 90),
 		}):Play()
 		task.delay(0.65, function()
@@ -336,71 +339,25 @@ function Components.ClearList(scroll: Instance)
 	end
 end
 
--- Popup window with a title ribbon and close button. Sized in pixels and
--- scaled to fit the screen, so it looks the same on PC and phones.
+-- Popup window, Steal an Egg style: dark navy body with a thick dark border,
+-- a light blue striped title bar with an icon and a big chunky title, and a
+-- square red close button. Sized in pixels and scaled to fit the screen while
+-- leaving room for the HUD on both sides, so the HUD stays visible around it.
+--   props.Icon = an Icons name ("Cart", "Book", ...)
 function Components.Window(props)
+	local Icons = require(script.Parent:WaitForChild("Icons"))
+
 	local frame = Instance.new("Frame")
 	frame.Name = props.Name or "Window"
 	frame.Size = props.Size or UDim2.fromOffset(720, 470)
-	frame.Position = UDim2.fromScale(0.5, 0.53)
+	frame.Position = UDim2.fromScale(0.5, 0.52)
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.BackgroundColor3 = Color3.new(1, 1, 1)
 	frame.Visible = false
 	frame.ZIndex = 10
-	Components.Corner(frame, UDim.new(0, 28))
-	Components.Stroke(frame, 6)
-	Components.Gradient(frame, Theme.Colors.Panel)
-
-	-- Faint polka-dot pattern on the panel (Pet Sim 99 style), kept inside
-	-- the rounded corners. Tinted to the window's color.
-	local pattern = Instance.new("Frame")
-	pattern.Name = "Pattern"
-	pattern.BackgroundTransparency = 1
-	pattern.ClipsDescendants = true
-	pattern.Size = UDim2.new(1, -36, 1, -36)
-	pattern.Position = UDim2.fromScale(0.5, 0.5)
-	pattern.AnchorPoint = Vector2.new(0.5, 0.5)
-	pattern.ZIndex = frame.ZIndex - 1
-	local dots = Instance.new("UIGridLayout")
-	dots.CellSize = UDim2.fromOffset(12, 12)
-	dots.CellPadding = UDim2.fromOffset(30, 30)
-	dots.Parent = pattern
-	local dotColor = (props.Colors or Theme.Colors.Pink)[2]
-	local size = props.Size or UDim2.fromOffset(720, 470)
-	local count = math.ceil((size.X.Offset - 36) / 42) * math.ceil((size.Y.Offset - 36) / 42)
-	for _ = 1, math.min(count, 400) do
-		local dot = Instance.new("Frame")
-		dot.BackgroundColor3 = dotColor
-		dot.BackgroundTransparency = 0.9
-		dot.BorderSizePixel = 0
-		dot.ZIndex = frame.ZIndex
-		Components.Corner(dot, UDim.new(1, 0))
-		dot.Parent = pattern
-	end
-	pattern.Parent = frame
-	local function tintPattern(color: Color3)
-		for _, dot in pattern:GetChildren() do
-			if dot:IsA("Frame") then
-				dot.BackgroundColor3 = color
-			end
-		end
-	end
-
-	-- Glossy white rim just inside the outline.
-	local rim = Instance.new("Frame")
-	rim.Name = "Rim"
-	rim.BackgroundTransparency = 1
-	rim.Size = UDim2.new(1, -12, 1, -12)
-	rim.Position = UDim2.fromScale(0.5, 0.5)
-	rim.AnchorPoint = Vector2.new(0.5, 0.5)
-	rim.ZIndex = frame.ZIndex
-	Components.Corner(rim, UDim.new(0, 23))
-	local rimStroke = Instance.new("UIStroke")
-	rimStroke.Color = Color3.new(1, 1, 1)
-	rimStroke.Thickness = 3
-	rimStroke.Transparency = 0.25
-	rimStroke.Parent = rim
-	rim.Parent = frame
+	Components.Corner(frame, UDim.new(0, 16))
+	Components.Stroke(frame, 6, Theme.PanelOutline)
+	Components.Gradient(frame, Theme.Colors.Navy)
 
 	local scale = Instance.new("UIScale")
 	scale.Parent = frame
@@ -408,60 +365,96 @@ function Components.Window(props)
 	local function fitScale(): number
 		local camera = Workspace.CurrentCamera
 		local viewport = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-		return math.min(1.2, viewport.X * 0.94 / frame.Size.X.Offset, viewport.Y * 0.8 / frame.Size.Y.Offset)
+		-- Keep ~150px free on each side for the HUD buttons.
+		local room = math.max(viewport.X - 300, viewport.X * 0.8)
+		return math.max(0.3, math.min(1.15, room / frame.Size.X.Offset, viewport.Y * 0.78 / frame.Size.Y.Offset))
 	end
 
-	-- Big white outlined title hanging off the top-left corner, with a large
-	-- icon overlapping the corner (like "Inventory!" in Pet Sim 99).
-	local ribbon = Instance.new("Frame")
-	ribbon.Name = "Title"
-	ribbon.BackgroundTransparency = 1
-	ribbon.Size = UDim2.new(0.75, 0, 0, 70)
-	ribbon.Position = UDim2.fromOffset(62, -40)
-	ribbon.ZIndex = frame.ZIndex + 2
-	ribbon.Parent = frame
+	-- Title bar.
+	local bar = Instance.new("Frame")
+	bar.Name = "TitleBar"
+	bar.BackgroundColor3 = Color3.new(1, 1, 1)
+	bar.Size = UDim2.new(1, -12, 0, 62)
+	bar.Position = UDim2.fromOffset(6, 6)
+	bar.ZIndex = 11
+	Components.Corner(bar, UDim.new(0, 12))
+	Components.Stroke(bar, 4, Theme.PanelOutline)
+	-- Always the same light blue, whatever the window (colors are ignored).
+	Components.Gradient(bar, Theme.Colors.TitleBlue)
+	bar.Parent = frame
+
+	-- Faint diagonal stripes across the bar.
+	local stripes = Instance.new("Frame")
+	stripes.Name = "Stripes"
+	stripes.BackgroundColor3 = Color3.new(1, 1, 1)
+	stripes.Size = UDim2.fromScale(1, 1)
+	stripes.ZIndex = 11
+	Components.Corner(stripes, UDim.new(0, 12))
+	local stripeGradient = Instance.new("UIGradient")
+	stripeGradient.Rotation = 20
+	local keys = { NumberSequenceKeypoint.new(0, 1) }
+	for i = 0, 3 do
+		local a = 0.08 + i * 0.24
+		table.insert(keys, NumberSequenceKeypoint.new(a, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(a + 0.001, 0.8))
+		table.insert(keys, NumberSequenceKeypoint.new(a + 0.09, 0.8))
+		table.insert(keys, NumberSequenceKeypoint.new(a + 0.091, 1))
+	end
+	table.insert(keys, NumberSequenceKeypoint.new(1, 1))
+	stripeGradient.Transparency = NumberSequence.new(keys)
+	stripeGradient.Parent = stripes
+	stripes.Parent = bar
+
+	local iconHolder = Instance.new("Frame")
+	iconHolder.Name = "IconHolder"
+	iconHolder.BackgroundTransparency = 1
+	iconHolder.Size = UDim2.fromOffset(58, 58)
+	iconHolder.Position = UDim2.new(0, 10, 0.5, 0)
+	iconHolder.AnchorPoint = Vector2.new(0, 0.5)
+	iconHolder.ZIndex = 12
+	iconHolder.Parent = bar
+	local function setIcon(name: string?)
+		iconHolder:ClearAllChildren()
+		if name then
+			Icons.Make(name, iconHolder, { Size = UDim2.fromOffset(54, 54), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Rotation = -8, ZIndex = 12 })
+		end
+	end
+	setIcon(props.Icon)
+
 	local title = Components.Label({
+		Name = "Title",
 		Text = props.Title,
-		Parent = ribbon,
+		Parent = bar,
+		Size = UDim2.new(1, -150, 0, 46),
+		Position = UDim2.new(0, 76, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		XAlign = Enum.TextXAlignment.Left,
-		MaxTextSize = 58,
-		StrokeThickness = 5,
-		ZIndex = frame.ZIndex + 2,
+		MaxTextSize = 46,
+		StrokeThickness = 4,
+		ZIndex = 12,
 	})
-	local icon = Components.Label({
-		Name = "Icon",
-		Text = props.Icon or "⭐",
-		Parent = frame,
-		Size = UDim2.fromOffset(92, 92),
-		Position = UDim2.fromOffset(-30, -50),
-		MaxTextSize = 80,
-		StrokeThickness = 0,
-		ZIndex = frame.ZIndex + 3,
-	})
-	icon.Rotation = -12
+	title.Font = Theme.TitleFont
 
 	local content = Instance.new("Frame")
 	content.Name = "Content"
 	content.BackgroundTransparency = 1
-	content.Position = UDim2.fromOffset(20, 50)
-	content.Size = UDim2.new(1, -40, 1, -66)
-	content.ZIndex = frame.ZIndex
+	content.Position = UDim2.fromOffset(18, 82)
+	content.Size = UDim2.new(1, -36, 1, -98)
+	content.ZIndex = 10
 	content.Parent = frame
 
 	local window = {
 		Frame = frame,
 		Content = content,
 		Title = title,
-		Ribbon = ribbon,
+		Ribbon = bar,
 	}
 
-	function window.SetTitle(text: string, colors, iconText: string?)
+	-- The colors argument is kept for callers but no longer used.
+	function window.SetTitle(text: string, _colors, iconName: string?)
 		title.Text = text
-		if colors then
-			tintPattern(colors[2])
-		end
-		if iconText then
-			icon.Text = iconText
+		if iconName then
+			setIcon(iconName)
 		end
 	end
 
@@ -491,22 +484,23 @@ function Components.Window(props)
 		return frame.Visible
 	end
 
-	-- Square red close button with a white X, on the top-right corner.
-	Components.Button({
+	-- Square red close button inside the title bar.
+	local _, closeText = Components.Button({
 		Name = "Close",
 		Text = "X",
-		Parent = frame,
-		Size = UDim2.fromOffset(62, 62),
-		Position = UDim2.new(1, 18, 0, -18),
-		AnchorPoint = Vector2.new(1, 0),
+		Parent = bar,
+		Size = UDim2.fromOffset(50, 50),
+		Position = UDim2.new(1, -7, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
 		Colors = Theme.Colors.Red,
-		CornerRadius = UDim.new(0, 16),
-		StrokeThickness = 5,
-		MaxTextSize = 40,
-		TextStroke = 3.5,
-		ZIndex = frame.ZIndex + 2,
+		CornerRadius = UDim.new(0, 10),
+		StrokeThickness = 4,
+		MaxTextSize = 36,
+		TextStroke = 3,
+		ZIndex = 13,
 		OnClick = window.Close,
 	})
+	closeText.Font = Theme.TitleFont
 
 	local camera = Workspace.CurrentCamera
 	if camera then
@@ -518,6 +512,7 @@ function Components.Window(props)
 	end
 
 	frame.Parent = props.Parent
+	shadow.Parent = props.Parent
 	return window
 end
 

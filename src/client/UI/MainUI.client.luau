@@ -1,4 +1,4 @@
--- Builds the main UI: HUD plus the Shop and Inventory windows.
+-- Builds the main UI: HUD plus the Shop, Inventory and Pet Index windows.
 -- Talking to a shopkeeper on the map (TalkToShop) runs their conversation in
 -- ShopTalk, which opens their shop. OpenShop opens a shop tab straight away.
 
@@ -8,11 +8,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
-local Theme = require(script.Parent:WaitForChild("Theme"))
-local Components = require(script.Parent:WaitForChild("Components"))
 local Hud = require(script.Parent:WaitForChild("Hud"))
 local ShopPanel = require(script.Parent:WaitForChild("ShopPanel"))
 local InventoryPanel = require(script.Parent:WaitForChild("InventoryPanel"))
+local IndexPanel = require(script.Parent:WaitForChild("IndexPanel"))
 local ShopTalk = require(script.Parent:WaitForChild("ShopTalk"))
 
 local player = Players.LocalPlayer
@@ -25,7 +24,8 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 local shop = ShopPanel.new(gui)
 local inventory = InventoryPanel.new(gui)
-local windows = { shop, inventory }
+local index = IndexPanel.new(gui)
+local windows = { shop, inventory, index }
 
 -- Only one window open at a time.
 local function closeWindows(except)
@@ -70,7 +70,7 @@ local function updateBlur()
 	for _, panel in windows do
 		anyOpen = anyOpen or panel.IsOpen()
 	end
-	TweenService:Create(blur, TweenInfo.new(0.25), { Size = if anyOpen then 12 else 0 }):Play()
+	TweenService:Create(blur, TweenInfo.new(0.25), { Size = if anyOpen then 6 else 0 }):Play()
 end
 for _, panel in windows do
 	panel.Window.Frame:GetPropertyChangedSignal("Visible"):Connect(updateBlur)
@@ -80,10 +80,10 @@ Hud.Build(gui, {
 	Shop = function()
 		toggle(shop)
 	end,
-	Pets = function()
-		-- Logo only for now; the pet index comes later.
-		Components.Notify(gui, "🐾 Pet Index coming soon!", Theme.Colors.Mint[1])
+	Index = function()
+		toggle(index)
 	end,
+	IndexReady = index.ReadyCount,
 	Inventory = function()
 		toggle(inventory)
 	end,

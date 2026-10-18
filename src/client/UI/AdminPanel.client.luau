@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local Icons = require(script.Parent:WaitForChild("Icons"))
 
 local player = Players.LocalPlayer
 
@@ -28,8 +29,8 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 local window = Components.Window({
 	Name = "Admin",
-	Title = "Admin!",
-	Icon = "⚙️",
+	Title = "Admin",
+	Icon = "Gear",
 	Parent = gui,
 	Size = UDim2.fromOffset(520, 400),
 	Colors = Theme.Colors.Purple,
@@ -45,11 +46,11 @@ local function run(action: string, amount: number)
 	local ok, success, message = pcall(remote.InvokeServer, remote, action, amount)
 	busy = false
 	if not ok then
-		Components.Notify(gui, "⚠️ Admin request failed", Theme.Colors.Red[1])
+		Components.Notify(gui, "Admin request failed", Theme.Colors.Red[1])
 	elseif success then
-		Components.Notify(gui, "✅ " .. tostring(message), Theme.Colors.Mint[1])
+		Components.Notify(gui, tostring(message), Theme.Colors.Mint[1])
 	else
-		Components.Notify(gui, "⚠️ " .. tostring(message), Theme.Colors.Red[1])
+		Components.Notify(gui, tostring(message), Theme.Colors.Red[1])
 	end
 end
 
@@ -59,8 +60,7 @@ local status = Components.Label({
 	Parent = content,
 	Size = UDim2.new(1, 0, 0, 34),
 	Position = UDim2.fromOffset(0, 14),
-	Color = Theme.DarkText,
-	StrokeThickness = 0,
+	StrokeThickness = 2.5,
 	MaxTextSize = 26,
 })
 local function updateStatus()
@@ -104,7 +104,7 @@ local function buttonRow(y: number, buttons)
 	end
 end
 
-sectionTitle("⬆️ Jump", 56)
+sectionTitle("Jump", 56)
 buttonRow(88, {
 	{ "+10 Lv", Theme.Colors.Sky, function() run("AddLevels", 10) end },
 	{ "+100 Lv", Theme.Colors.Sky, function() run("AddLevels", 100) end },
@@ -158,20 +158,20 @@ Components.Button({
 	OnClick = setTyped,
 })
 
-sectionTitle("💰 Money", 220)
+sectionTitle("Money", 220)
 buttonRow(252, {
 	{ "+1K", Theme.Colors.Yellow, function() run("AddMoney", 1e3) end },
 	{ "+1M", Theme.Colors.Yellow, function() run("AddMoney", 1e6) end },
 	{ "+1B", Theme.Colors.Orange, function() run("AddMoney", 1e9) end },
 })
 
--- Small gear button on the right edge, below the player list.
-Components.Button({
+-- Small gear button on the right edge, under the HUD's Pets button.
+local adminButton = Components.Button({
 	Name = "AdminButton",
-	Text = "⚙️",
+	Text = "",
 	Parent = gui,
 	Size = UDim2.fromOffset(54, 54),
-	Position = UDim2.new(1, -14, 0.3, 0),
+	Position = UDim2.new(1, -14, 0.42, 120),
 	AnchorPoint = Vector2.new(1, 0),
 	Colors = Theme.Colors.Purple,
 	CornerRadius = UDim.new(0, 16),
@@ -185,6 +185,13 @@ Components.Button({
 			window.Open()
 		end
 	end,
+})
+
+Icons.Make("Gear", adminButton, {
+	Size = UDim2.fromOffset(40, 40),
+	Position = UDim2.fromScale(0.5, 0.46),
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	ZIndex = 3,
 })
 
 UserInputService.InputBegan:Connect(function(input, processed)

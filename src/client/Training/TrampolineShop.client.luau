@@ -159,13 +159,13 @@ local function refresh()
 			text, colors = "Using", Bubbly.Colors.Mint
 		elseif tier == owned + 1 then
 			if reached < entry.Island then
-				text, colors = `🔒 Reach {islandName(entry.Island)}`, Bubbly.Colors.Gray
+				text, colors = `Reach {islandName(entry.Island)}`, Bubbly.Colors.Gray
 			else
 				text = Format.Money(entry.Price)
 				colors = if money >= entry.Price then Bubbly.Colors.Yellow else Bubbly.Colors.Red
 			end
 		else
-			text, colors = "🔒 " .. Format.Money(entry.Price), Bubbly.Colors.Gray
+			text, colors = Format.Money(entry.Price), Bubbly.Colors.Gray
 		end
 		row.Label.Text = text
 		Bubbly.SetColors(row.Button, colors)
@@ -235,7 +235,7 @@ for tier, entry in JumpBalance.TrampolineTiers do
 	})
 	local need = if entry.Island > 0 then ` · from {islandName(entry.Island)}` else ""
 	Bubbly.Label({
-		Text = `⬆️ +{Format.Short(entry.XpPerBounce)} Jump XP{need}`,
+		Text = `+{Format.Short(entry.XpPerBounce)} Jump XP{need}`,
 		Parent = row,
 		Size = UDim2.new(0.55, 0, 0, 22),
 		Position = UDim2.fromOffset(76, 42),

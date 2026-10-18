@@ -167,7 +167,7 @@ local function refreshBar()
 	local need = JumpBalance.XpForLevel(level)
 	levelText.Text = "Level " .. level
 	countText.Text = Format.Short(xp) .. " / " .. Format.Short(need)
-	jumpText.Text = "⬆️ " .. tostring(player:GetAttribute("TrainedJump") or JumpBalance.JumpForLevel(level)) .. " Jump"
+	jumpText.Text = tostring(player:GetAttribute("TrainedJump") or JumpBalance.JumpForLevel(level)) .. " Jump"
 	if shownLevel ~= level then
 		-- New level: restart the fill from empty instead of sliding backwards.
 		fill.Size = UDim2.fromScale(0, 1)
@@ -255,7 +255,7 @@ local function showLevelUp(level: number, jump: number?)
 		ZIndex = 5,
 	})
 	local jumpLine = Bubbly.Label({
-		Text = `⬆️ {jump or JumpBalance.JumpForLevel(level)} Jump`,
+		Text = `{jump or JumpBalance.JumpForLevel(level)} Jump`,
 		Parent = banner,
 		Size = UDim2.fromScale(0.7, 0.55),
 		Position = UDim2.fromScale(0.5, 1.05),
@@ -345,7 +345,7 @@ local function refreshSigns()
 			sign.Gui.Adornee = pad
 			if kind == Trampolines.Launch then
 				sign.Gui.Enabled = pad ~= nil
-				sign.Title.Text = "🚀 LAUNCH"
+				sign.Title.Text = "LAUNCH"
 				sign.Sub.Text = `Jump {JumpBalance.LaunchHeightMultiplier}x higher!`
 			else
 				local own = JumpBalance.Tier(tierFor(trampoline))
@@ -591,7 +591,7 @@ local function launch(humanoid: Humanoid, root: BasePart)
 	local jump = player:GetAttribute("JumpPower") or humanoid.JumpPower
 	local velocity = root.AssemblyLinearVelocity
 	root.AssemblyLinearVelocity = Vector3.new(velocity.X * 0.3, jump * math.sqrt(JumpBalance.LaunchHeightMultiplier), velocity.Z * 0.3)
-	popup("🚀 LAUNCH!", GOLD, 0.9, 0.24, 0.5)
+	popup("LAUNCH!", GOLD, 0.9, 0.24, 0.5)
 	sparkle(root)
 end
 

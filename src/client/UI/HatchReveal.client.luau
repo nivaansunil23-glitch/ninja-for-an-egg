@@ -14,6 +14,7 @@ local EggConfig = require(Shared:WaitForChild("EggConfig"))
 local EggRemotes = require(Shared:WaitForChild("EggRemotes"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local Icons = require(script.Parent:WaitForChild("Icons"))
 
 local player = Players.LocalPlayer
 
@@ -202,7 +203,7 @@ local function play(info)
 		end
 	end
 	local center = Components.CenterOf(egg)
-	Components.Burst(gui, center, { "✨", "⭐", "💥" })
+	Components.Burst(gui, center)
 
 	-- 3. Reveal: rays and glow in the rarity color, the pet spins in.
 	local reveal = Instance.new("Frame")
@@ -256,15 +257,13 @@ local function play(info)
 	revealScale.Parent = reveal
 	tween(revealScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
 
-	local petIcon = Components.Label({
+	local petIcon = Icons.Make("Paw", reveal, {
 		Name = "Pet",
-		Text = Theme.RarityIcon[pet.Rarity] or "🐣",
-		Parent = reveal,
 		Size = UDim2.fromScale(0.42, 0.42),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		MaxTextSize = 200,
-		StrokeThickness = 0,
+		Color = rarityColor:Lerp(Color3.new(1, 1, 1), 0.35),
+		Pixels = 180,
 		ZIndex = 5,
 	})
 	petIcon.Rotation = -200
@@ -273,7 +272,7 @@ local function play(info)
 	-- 4. "You hatched!" banner on top, and a card with name, rarity and weight.
 	local banner, bannerText = Components.Tag({
 		Name = "Banner",
-		Text = "🎉 YOU HATCHED! 🎉",
+		Text = "YOU HATCHED!",
 		Parent = screen,
 		Size = UDim2.fromOffset(420, 70),
 		Position = UDim2.fromScale(0.5, 0.06),
@@ -286,6 +285,7 @@ local function play(info)
 	banner.Rotation = -2
 	Components.Shine(banner, 0.4)
 	bannerText:FindFirstChildOfClass("UIStroke").Thickness = 3.5
+	bannerText.Font = Theme.TitleFont
 
 	local card = Components.Box({
 		Name = "Info",
@@ -344,7 +344,7 @@ local function play(info)
 	end
 	Components.Tag({
 		Name = "Weight",
-		Text = string.format("⚖️ %.2f kg", pet.Weight or 0),
+		Text = string.format("%.2f kg", pet.Weight or 0),
 		Parent = card,
 		Size = UDim2.fromOffset(180, 40),
 		Position = UDim2.new(0.5, 0, 1, -16),
@@ -373,10 +373,10 @@ local function play(info)
 		tween(pair[1], 0.35, { Scale = pair[2] }, Enum.EasingStyle.Back)
 	end
 	task.delay(0.2, function()
-		Components.Burst(gui, center, { "⭐", "✨", "🎉", Theme.RarityIcon[pet.Rarity] or "🐣" })
+		Components.Burst(gui, center)
 		if rank >= 4 then
 			task.wait(0.25)
-			Components.Burst(gui, center, { "⭐", "💎", "🎉" })
+			Components.Burst(gui, center)
 		end
 	end)
 

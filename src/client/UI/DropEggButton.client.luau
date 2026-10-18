@@ -22,7 +22,7 @@ gui.Parent = playerGui
 
 local button = Bubbly.Button({
 	Name = "DropEgg",
-	Text = "🥚 Drop Egg",
+	Text = "Drop Egg",
 	Parent = gui,
 	Size = UDim2.fromOffset(190, 46),
 	Colors = Bubbly.Colors.Red,

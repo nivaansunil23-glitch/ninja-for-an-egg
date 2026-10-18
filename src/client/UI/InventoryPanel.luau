@@ -13,54 +13,23 @@ local SellConfig = require(Config:WaitForChild("SellConfig"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local Components = require(script.Parent:WaitForChild("Components"))
 local ClientState = require(script.Parent:WaitForChild("ClientState"))
+local Icons = require(script.Parent:WaitForChild("Icons"))
 
 local player = Players.LocalPlayer
 
 local BAD = Color3.fromRGB(255, 130, 130)
 local GOOD = Color3.fromRGB(140, 255, 170)
 
--- Placeholder pet art until pet models/icons exist.
-local RARITY_ICON = {
-	Common = "🐣",
-	Uncommon = "🐥",
-	Rare = "🐾",
-	Epic = "🦄",
-	Legendary = "🐉",
-	Secret = "👾",
-}
 
 local STARS = { Epic = 1, Legendary = 2, Secret = 3 }
-
--- Paint-splash blob behind a pet icon (a few overlapping circles), like the
--- item grid in Pet Sim 99.
-local function splash(parent: GuiObject, color: Color3)
-	local light = color:Lerp(Color3.new(1, 1, 1), 0.25)
-	for _, blob in {
-		{ 84, 0.5, 40, 1 },
-		{ 34, 0.22, 20, 2 },
-		{ 28, 0.8, 66, 3 },
-		{ 18, 0.84, 14, 4 },
-	} do
-		local circle = Instance.new("Frame")
-		circle.Name = "Splash"
-		circle.BackgroundColor3 = if blob[4] == 1 then color else light
-		circle.BorderSizePixel = 0
-		circle.ZIndex = 0
-		circle.Size = UDim2.fromOffset(blob[1], blob[1])
-		circle.Position = UDim2.new(blob[2], 0, 0, blob[3])
-		circle.AnchorPoint = Vector2.new(0.5, 0.5)
-		Components.Corner(circle, UDim.new(1, 0))
-		circle.Parent = parent
-	end
-end
 
 local InventoryPanel = {}
 
 function InventoryPanel.new(gui: ScreenGui)
 	local window = Components.Window({
 		Name = "Inventory",
-		Title = "Inventory!",
-		Icon = "🎒",
+		Title = "Inventory",
+		Icon = "Bag",
 		Parent = gui,
 		Colors = Theme.Colors.Sky,
 	})
@@ -107,7 +76,7 @@ function InventoryPanel.new(gui: ScreenGui)
 	end
 
 	Components.Button({
-		Text = "⭐ Equip Best",
+		Text = "Equip Best",
 		Parent = header,
 		Size = UDim2.fromOffset(190, 46),
 		Position = UDim2.new(1, -6, 0.5, 0),
@@ -133,41 +102,39 @@ function InventoryPanel.new(gui: ScreenGui)
 		card.Text = ""
 		card.AutoButtonColor = false
 		card.LayoutOrder = order
-		-- No box: just a color splash behind a big icon.
-		card.BackgroundTransparency = 1
-		splash(card, rarityColor)
+		-- Square card in the rarity colour (same look as the Pet Index).
+		card.BackgroundColor3 = Color3.new(1, 1, 1)
+		Components.Corner(card, UDim.new(0, 12))
+		local stroke = Components.Stroke(card, if pet.Equipped then 5 else 4)
+		if pet.Equipped then
+			stroke.Color = Theme.Colors.Mint[2]
+		end
+		Components.Gradient(card, { rarityColor:Lerp(Color3.new(1, 1, 1), 0.3), rarityColor })
+		Components.Shine(card, 0.25)
 		local scale = Instance.new("UIScale")
 		scale.Parent = card
 		card.MouseEnter:Connect(function()
-			scale.Scale = 1.06
+			scale.Scale = 1.05
 		end)
 		card.MouseLeave:Connect(function()
 			scale.Scale = 1
 		end)
 
-		local icon = Components.Label({
-			Text = RARITY_ICON[pet.Rarity] or "🐣",
-			Parent = card,
-			Size = UDim2.fromOffset(70, 64),
-			Position = UDim2.new(0.5, 0, 0, 6),
+		Icons.Make("Paw", card, {
+			Size = UDim2.fromOffset(56, 56),
+			Position = UDim2.new(0.5, 0, 0, 8),
 			AnchorPoint = Vector2.new(0.5, 0),
-			MaxTextSize = 60,
-			StrokeThickness = 0,
+			Color = Color3.new(1, 1, 1),
 			ZIndex = 2,
 		})
-		icon.Rotation = -6
 		if STARS[pet.Rarity] then
-			Components.Label({
-				Name = "Stars",
-				Text = string.rep("⭐", STARS[pet.Rarity]),
-				Parent = card,
-				Size = UDim2.fromOffset(60, 20),
-				Position = UDim2.fromOffset(2, 0),
-				XAlign = Enum.TextXAlignment.Left,
-				MaxTextSize = 18,
-				StrokeThickness = 0,
-				ZIndex = 2,
-			})
+			for i = 1, STARS[pet.Rarity] do
+				Icons.Make("Star", card, {
+					Size = UDim2.fromOffset(18, 18),
+					Position = UDim2.fromOffset(4 + (i - 1) * 16, 4),
+					ZIndex = 3,
+				})
+			end
 		end
 		Components.Label({
 			Text = pet.Name,
@@ -204,13 +171,11 @@ function InventoryPanel.new(gui: ScreenGui)
 				CornerRadius = UDim.new(1, 0),
 				ZIndex = 2,
 			})
-			Components.Label({
-				Text = "✔",
-				Parent = badge,
-				Size = UDim2.fromScale(0.7, 0.7),
+			Icons.Make("Check", badge, {
+				Size = UDim2.fromOffset(26, 26),
 				Position = UDim2.fromScale(0.5, 0.5),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				ZIndex = 2,
+				ZIndex = 3,
 			})
 		end
 
@@ -254,7 +219,7 @@ function InventoryPanel.new(gui: ScreenGui)
 				Parent = grid,
 				Wrapped = true,
 				MaxTextSize = 22,
-				Color = Theme.Colors.Purple[1],
+				Color = Theme.Text,
 			})
 		end
 	end

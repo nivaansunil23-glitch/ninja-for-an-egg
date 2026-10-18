@@ -363,7 +363,7 @@ function Dialogue.new(gui: ScreenGui)
 			end
 		end
 		viewport.Visible = hasFace
-		portraitIcon.Text = if hasFace then "" else (icon or "💬")
+		portraitIcon.Text = if hasFace then "" else (icon or "")
 	end
 
 	-- info = { Name, Colors, Icon, Portrait = Model? }
