@@ -4,7 +4,7 @@
 -- Training: step onto your trampoline, or walk up to it and press the Jump!
 -- prompt (E) to hop on, and you start bouncing by yourself. Every
 -- bounce gives Jump XP, and clicking (tap, Space, or A / R2 on a controller)
--- while you bounce gives more. XP fills the level bar at the top and every
+-- while you bounce gives more. XP fills the level bar (shown only while you bounce) and every
 -- level adds jump power. Walk away or press STOP to get off.
 -- Launch: landing on the launch trampoline throws you
 -- JumpBalance.LaunchHeightMultiplier times as high as your normal jump.
@@ -43,7 +43,6 @@ local CENTERING = 8 -- pull back over your spot, per stud you drift off it
 local MAX_CENTERING_SPEED = 24
 local BOUNCE_COOLDOWN = 0.25
 local CLICK_GAP = 1 / 12 -- client-side throttle, the server has its own limit
-local BAR_LINGER = 3 -- seconds the level bar stays up after you stop
 local STAND_ABOVE_PAD = 7 -- how far over the pad's top your root can be and count as on it
 local LAUNCH_COOLDOWN = 0.8
 local REFRESH_SECONDS = 1
@@ -57,7 +56,6 @@ local session = nil -- { Trampoline, Anchor, LastBounce } while bouncing
 local mustLeave = false -- after getting off, step off the pad before it starts again
 local lastClick = 0
 local lastLaunch = 0
-local barToken = 0
 
 local function getCharacter()
 	local character = player.Character
@@ -182,18 +180,10 @@ player:GetAttributeChangedSignal("JumpXP"):Connect(refreshBar)
 player:GetAttributeChangedSignal("TrainedJump"):Connect(refreshBar)
 refreshBar()
 
+-- The level bar only shows while you're on the trampoline; it goes the
+-- moment you get off (user, 2026-10-19).
 local function showBar()
-	barToken += 1
-	bar.Visible = true
-	if session then
-		return
-	end
-	local token = barToken
-	task.delay(BAR_LINGER, function()
-		if token == barToken and not session then
-			bar.Visible = false
-		end
-	end)
+	bar.Visible = session ~= nil
 end
 
 -- "+1 Jump XP" popups floating up from your character.
@@ -629,7 +619,7 @@ local function stopTraining(tellServer: boolean, hopOff: boolean)
 	endTrick()
 	stopButton.Visible = false
 	hint.Visible = false
-	showBar()
+	showBar() -- hides it
 	setUpgradePrompts(true)
 	refreshJumpPrompts()
 	refreshSigns()
