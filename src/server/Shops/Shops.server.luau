@@ -24,6 +24,8 @@ local ShopConfig = require(Shared:WaitForChild("Config"):WaitForChild("ShopConfi
 local PlayerData = require(script.Parent.Parent:WaitForChild("Player"):WaitForChild("PlayerData"))
 local VertexShop = require(script.Parent:WaitForChild("VertexShop"))
 local GearShop = require(script.Parent:WaitForChild("GearShop"))
+local Wearables = require(script.Parent:WaitForChild("Wearables"))
+Wearables.Start()
 local SellShop = require(script.Parent:WaitForChild("SellShop"))
 
 Net.Function("BuyVertex").OnServerInvoke = VertexShop.Buy

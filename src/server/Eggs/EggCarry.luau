@@ -424,7 +424,9 @@ local function safeDrop(player, y)
 	end
 	local power = player:GetAttribute("JumpPower")
 	local ownJump = if type(power) == "number" then JumpBalance.MaxJumpHeight(power) else 0
-	return S.CrackSafeJumps * ownJump + S.CrackSafeSteps * step
+	-- better shoes = fall further before it cracks (Shops/Wearables sets this)
+	local shoes = player:GetAttribute("ShoeSafeFall") or 0
+	return S.CrackSafeJumps * ownJump + S.CrackSafeSteps * step + shoes
 end
 
 -- Measures each carrier's fall from the highest point of their time in the air.

@@ -1,5 +1,6 @@
 -- Works out a player's jump power: the jump trained on the trampoline (their
--- level, JumpBalance), times their vertex, times held gear like the Jump Coil.
+-- level, JumpBalance), times their vertex, times the Coil they wear (and old
+-- held gear like the Jump Coil).
 -- With Jump Boost switched off it's the plain starting jump. Anything that
 -- changes one of those calls JumpPower.Refresh(player).
 --
@@ -30,6 +31,9 @@ function JumpPower.Get(player: Player): number
 	end
 	local data = PlayerData.Get(player)
 	local power = JumpPower.Trained(player) * VertexConfig.Multiplier(data and data.VertexTier)
+
+	-- the Coil you wear (Shops/Wearables sets this)
+	power *= player:GetAttribute("CoilMultiplier") or 1
 
 	local character = player.Character
 	if character then

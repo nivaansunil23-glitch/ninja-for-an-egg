@@ -91,10 +91,10 @@ function Conversations.Gear(talk)
 			talk.Say(shop.BrowseReply, "Point")
 			return talk.OpenShop()
 		elseif choice == 2 then
-			local lines = {}
-			for _, gear in GearConfig.List() do
-				table.insert(lines, `{gear.Icon} {gear.Name}: {gear.Description}`)
-			end
+			local lines = {
+				`Shoes go on your feet: better shoes let you fall further with an egg before it cracks.`,
+				`Coils go on your back: each one adds jump power, from +5% up to +{math.floor((GearConfig.Get("Coil", 7).JumpMultiplier - 1) * 100 + 0.5)}%.`,
+			}
 			table.insert(lines, shop.AskReply)
 			talk.Say(table.concat(lines, "\n"))
 		else

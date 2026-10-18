@@ -236,8 +236,16 @@ buttonRow(moneyCard, rowY(1), {
 	{ "+1B", Theme.Colors.Orange, function() run("AddMoney", 1e9) end },
 })
 
+-- Gear card: own every shoe + coil tier to try them on, or take them all off.
+local gearY = moneyY + moneyHeight + GAP
+local gearCard, gearHeight = card("GearCard", "Gear", gearY, 1)
+buttonRow(gearCard, rowY(1), {
+	{ "All Gear", Theme.Colors.Mint, function() run("AllGear", 0) end },
+	{ "No Gear", Theme.Colors.Red, function() run("NoGear", 0) end },
+})
+
 -- Day/night card: force a phase, skip to the next one, or reset island eggs.
-local dayNightY = moneyY + moneyHeight + GAP
+local dayNightY = gearY + gearHeight + GAP
 local dayNightCard, dayNightHeight = card("DayNightCard", "Day / Night", dayNightY, 1)
 buttonRow(dayNightCard, rowY(1), {
 	{ "Force Day", Theme.Colors.Sky, function() run("ForceDay", 0) end },

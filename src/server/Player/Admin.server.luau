@@ -11,6 +11,7 @@
 --   "GiveEgg"    amount = index into EggConfig.EggOrder; puts that egg in your hands
 --   "ReadyEggs"  every egg growing in your pen is ready to hatch right now
 --   "CrackEgg"   cracks the egg you're carrying (knocks you down, egg falls out)
+--   "AllGear" / "NoGear"   own every shoe and coil tier / none (amount = tier to keep, 0 = none)
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
 local Players = game:GetService("Players")
@@ -29,6 +30,7 @@ local EggSpawner = require(Server:WaitForChild("Eggs"):WaitForChild("EggSpawner"
 local EggCarry = require(Server:WaitForChild("Eggs"):WaitForChild("EggCarry"))
 local EggFactory = require(Server:WaitForChild("Eggs"):WaitForChild("EggFactory"))
 local PenService = require(Server:WaitForChild("Eggs"):WaitForChild("PenService"))
+local GearShop = require(Server:WaitForChild("Shops"):WaitForChild("GearShop"))
 local EggConfig = require(Shared:WaitForChild("EggConfig"))
 
 local MAX_MONEY_PER_CLICK = 1e12
@@ -148,6 +150,12 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		end
 		EggCarry.AddCracks(player, 1)
 		return true, "Crack!"
+	elseif action == "AllGear" then
+		GearShop.SetAll(player, true)
+		return true, "You own every shoe and coil"
+	elseif action == "NoGear" then
+		GearShop.SetAll(player, false)
+		return true, "Shoes and coils removed"
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"

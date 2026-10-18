@@ -26,10 +26,10 @@ local Icons = require(script.Parent:WaitForChild("Icons"))
 -- Drawn icons for each shop and gear item (instead of their emoji).
 local SHOP_ICONS = { Gear = "Gear", Sell = "Cash", Vertex = "Shoe" }
 local function gearIcon(gear): string
-	if gear.Fuel then
+	if gear.Icon then
+		return gear.Icon
+	elseif gear.Fuel then
 		return "Rocket"
-	elseif gear.JumpMultiplier then
-		return "Shoe"
 	end
 	return "Star"
 end
@@ -58,7 +58,9 @@ local function powerText(entry): string
 end
 
 local function gearStat(gear): string?
-	if gear.JumpMultiplier then
+	if gear.SafeFall then
+		return `+{gear.SafeFall} studs safe fall`
+	elseif gear.JumpMultiplier then
 		return `+{math.floor((gear.JumpMultiplier - 1) * 100 + 0.5)}% Jump`
 	elseif gear.Fuel then
 		return `{gear.Fuel}s of flight`
@@ -290,6 +292,7 @@ function ShopPanel.new(gui: ScreenGui)
 			Components.Shine(tile)
 			local icon = Icons.Make(gearIcon(gear), tile, {
 				Name = "Icon",
+				Color = gear.Color,
 				Size = UDim2.fromOffset(84, 84),
 				Position = UDim2.fromScale(0.5, 0.5),
 				AnchorPoint = Vector2.new(0.5, 0.5),
@@ -375,7 +378,12 @@ function ShopPanel.new(gui: ScreenGui)
 				OnClick = function()
 					local owned = ClientState.Data and ClientState.Data.Gear or {}
 					if owned[gear.Id] then
-						notify(true, `You already have the {gear.Name}! It's in your hotbar.`)
+						notify(true, `You already have the {gear.Name}!`)
+						return
+					end
+					local before = gear.Tier and GearConfig.Get(gear.Line, gear.Tier - 1)
+					if before and not owned[before.Id] then
+						notify(false, `Get the {before.Name} first!`)
 						return
 					end
 					purchase("Gear", "BuyGear", button, gear.Id)
@@ -396,13 +404,24 @@ function ShopPanel.new(gui: ScreenGui)
 			local owned = ClientState.Data and ClientState.Data.Gear or {}
 			local cash = money()
 			for gearId, entry in cards do
-				local price = entry.Gear.Price
+				local gear = entry.Gear
+				local price = gear.Price
+				local best = gear.Line and GearConfig.BestTier(owned, gear.Line) or 0
+				local before = gear.Tier and GearConfig.Get(gear.Line, gear.Tier - 1)
 				if owned[gearId] then
-					entry.Label.Text = "Owned"
+					local wearing = gear.Tier == best
+					entry.Label.Text = if wearing then "Wearing" else "Owned"
 					Components.SetColors(entry.Button, Theme.Colors.Mint)
-					entry.StockLabel.Text = "YOURS!"
+					entry.StockLabel.Text = if wearing then "WEARING" else "OWNED"
 					Components.SetColors(entry.Stock, Theme.Colors.Sky)
-					entry.Note.Text = "In your hotbar"
+					entry.Note.Text = if wearing then (if gear.Line == "Shoes" then "On your feet" else "On your back") else "You have a better one"
+					entry.Note.TextColor3 = Theme.DarkText
+				elseif before and not owned[before.Id] then
+					entry.Label.Text = Format.Money(price)
+					Components.SetColors(entry.Button, Theme.Colors.NavyCard)
+					entry.StockLabel.Text = "LOCKED"
+					Components.SetColors(entry.Stock, Theme.Colors.NavyCard)
+					entry.Note.Text = `Get {before.Name} first`
 					entry.Note.TextColor3 = Theme.DarkText
 				else
 					entry.Label.Text = Format.Money(price)

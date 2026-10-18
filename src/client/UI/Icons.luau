@@ -6,7 +6,7 @@
 --   Icons.Make("Paw", parent, { Size = ..., Silhouette = true })      -- dark locked look
 --
 -- Names: Cash, Coin, Shoe, Cart, Book, Paw, Trophy, Egg, Bag, Gear, Lock,
--- Star, Rocket, Check, Sun, Moon. Sizes are in pixels so the outlines can match the icon size.
+-- Star, Rocket, Check, Sun, Moon, Coil. Sizes are in pixels so the outlines can match the icon size.
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 
@@ -113,8 +113,8 @@ function DRAW.Coin(p)
 	p.Gloss(0.32, 0.28, 0.18, 0.12)
 end
 
-function DRAW.Shoe(p)
-	local red = rgb(240, 70, 70)
+function DRAW.Shoe(p, color: Color3?)
+	local red = color or rgb(240, 70, 70)
 	p.Shape(0.5, 0.8, 0.9, 0.16, WHITE, 0.5) -- sole
 	p.Shape(0.4, 0.5, 0.44, 0.5, red, 0.35, { Layer = 1, Shade = true }) -- ankle
 	p.Shape(0.6, 0.66, 0.74, 0.3, red, 0.5, { Layer = 1, Shade = true }) -- toe
@@ -124,6 +124,19 @@ function DRAW.Shoe(p)
 	p.Shape(0.14, 0.42, 0.26, 0.1, rgb(140, 220, 255), 0.5, { Rotation = 20 })
 	p.Shape(0.12, 0.56, 0.22, 0.09, rgb(140, 220, 255), 0.5, { Rotation = 8 })
 	p.Gloss(0.36, 0.36, 0.14, 0.1)
+end
+
+-- A chunky spring: stacked tilted rings on a base and cap.
+function DRAW.Coil(p, color: Color3?)
+	local c = color or rgb(120, 220, 255)
+	local dark = c:Lerp(Color3.new(), 0.35)
+	p.Shape(0.5, 0.86, 0.62, 0.1, dark, 0.4, { Shade = true }) -- base
+	for i = 0, 4 do
+		p.Shape(0.5, 0.74 - i * 0.12, 0.56, 0.11, if i % 2 == 0 then c else c:Lerp(WHITE, 0.25), 0.5,
+			{ Layer = 1 + i, Rotation = if i % 2 == 0 then -8 else 8, Shade = true })
+	end
+	p.Shape(0.5, 0.14, 0.6, 0.1, dark, 0.4, { Layer = 7, Shade = true }) -- cap
+	p.Gloss(0.38, 0.5, 0.12, 0.05, 8)
 end
 
 function DRAW.Cart(p)
