@@ -5,7 +5,8 @@
 --
 -- At night: every island's world eggs are cleared (fresh ones come back at
 -- day), and nobody can go up to the islands: no launch pad, no jetpack lift,
--- and anyone on a cloud or sky island (or above NightMaxHeight when night
+-- an invisible ceiling at NightCeilingHeight stops anyone jumping up, and
+-- anyone on a cloud or sky island (or above NightMaxHeight when night
 -- starts) is sent back to their plot. Jumping and trampoline training still work.
 
 local Workspace = game:GetService("Workspace")
@@ -19,6 +20,11 @@ DayNightConfig.NightSeconds = 2 * 60
 -- Studs above the base (GroundY) you can't be above when night starts. Under
 -- the first island (150), over the base mountains (under 140).
 DayNightConfig.NightMaxHeight = 145
+
+-- Studs above the base where the invisible night ceiling starts. Over the
+-- base mountain tops (under 140) with head room, level with the first
+-- island's top (150), so nobody can jump or climb up there at night.
+DayNightConfig.NightCeilingHeight = 148
 
 -- How long the sky takes to fade between day and night.
 DayNightConfig.FadeSeconds = 8

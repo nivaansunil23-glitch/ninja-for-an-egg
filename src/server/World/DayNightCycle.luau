@@ -3,9 +3,11 @@
 --   * Eggs/EggSpawner clears island eggs at night and refills them at day.
 --   * The client blocks the launch pad and jetpack lift, fades the lighting
 --     and shows the HUD timer.
---   * Here: nobody goes up at night. When night starts, anyone above
---     NightMaxHeight is sent to their plot, and during the night anyone
---     standing on a cloud or sky island is too. A held jetpack is put away.
+--   * Here: nobody goes up at night. An invisible ceiling (Map.NightCeiling,
+--     NightCeilingHeight over the base, as wide as Map.MapBarrier) turns solid.
+--     When night starts, anyone above NightMaxHeight is sent to their plot,
+--     and during the night anyone standing on a cloud or sky island is too.
+--     A held jetpack is put away.
 --     Jumping and trampoline training still work.
 -- Started by World/DayNight. The admin panel calls SetPhase / Skip.
 
@@ -21,6 +23,8 @@ local PenService = require(script.Parent.Parent:WaitForChild("Eggs"):WaitForChil
 local CHECK_SECONDS = 0.25
 local STAND_CHECK = 8 -- studs below the root that count as standing on something
 local NO_CRACK_SECONDS = 3 -- the trip down never cracks a carried egg
+local CEILING_THICKNESS = 4
+local CEILING_TILE = 2000 -- parts can't be bigger than 2048 studs a side
 
 local DayNightCycle = {}
 
@@ -96,11 +100,61 @@ local function putAwayJetpack(player: Player)
 	end
 end
 
+-- The night ceiling: invisible tiles over the whole map, only solid at night.
+local ceiling: Folder? = nil
+
+local function setCeiling(night: boolean)
+	if ceiling then
+		for _, part in ceiling:GetChildren() do
+			if part:IsA("BasePart") then
+				part.CanCollide = night
+			end
+		end
+	end
+end
+
+local function buildCeiling()
+	local map = Workspace:WaitForChild("Map", math.huge)
+	local barrier = map:WaitForChild("MapBarrier", math.huge)
+	local minX, maxX = barrier:GetAttribute("MinX"), barrier:GetAttribute("MaxX")
+	local minZ, maxZ = barrier:GetAttribute("MinZ"), barrier:GetAttribute("MaxZ")
+	if type(minX) ~= "number" or type(maxX) ~= "number" or type(minZ) ~= "number" or type(maxZ) ~= "number" then
+		warn("[DayNight] Map.MapBarrier has no bounds, no night ceiling")
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "NightCeiling"
+	local y = groundY() + DayNightConfig.NightCeilingHeight + CEILING_THICKNESS / 2
+	local countX = math.ceil((maxX - minX) / CEILING_TILE)
+	local countZ = math.ceil((maxZ - minZ) / CEILING_TILE)
+	local sizeX, sizeZ = (maxX - minX) / countX, (maxZ - minZ) / countZ
+	for i = 1, countX do
+		for j = 1, countZ do
+			local part = Instance.new("Part")
+			part.Name = "Ceiling"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Transparency = 1
+			part.Material = Enum.Material.SmoothPlastic
+			part.Size = Vector3.new(sizeX, CEILING_THICKNESS, sizeZ)
+			part.Position = Vector3.new(minX + (i - 0.5) * sizeX, y, minZ + (j - 0.5) * sizeZ)
+			part.Parent = folder
+		end
+	end
+	folder.Parent = map
+	ceiling = folder
+	setCeiling(DayNightConfig.IsNight())
+end
+
 -- Switches to day or night now, with a full-length phase from here.
 function DayNightCycle.SetPhase(night: boolean)
 	local seconds = if night then DayNightConfig.NightSeconds else DayNightConfig.DaySeconds
 	Workspace:SetAttribute("DayNightEndsAt", Workspace:GetServerTimeNow() + seconds)
 	Workspace:SetAttribute("IsNight", night)
+	setCeiling(night)
 	if night then
 		local cap = groundY() + DayNightConfig.NightMaxHeight
 		for _, player in Players:GetPlayers() do
@@ -123,6 +177,7 @@ function DayNightCycle.Start()
 	end
 	started = true
 	DayNightCycle.SetPhase(false)
+	task.spawn(buildCeiling)
 	task.spawn(function()
 		while true do
 			task.wait(CHECK_SECONDS)

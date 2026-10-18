@@ -1,6 +1,8 @@
 -- Invisible walls around the whole map (the base, every island and every cloud
 -- zone) so nobody can fly or get flung off the edge of the world. Built at
 -- runtime from Map.CloudZones and Map.Base, so they follow the map if it grows.
+-- The folder (Map.MapBarrier) gets MinX, MaxX, MinZ, MaxZ attributes so other
+-- code (the night ceiling in World/DayNightCycle) can cover the same area.
 
 local Workspace = game:GetService("Workspace")
 
@@ -88,5 +90,9 @@ wall("West", Vector3.new(minX - THICKNESS / 2, midY, midZ), Vector3.new(THICKNES
 wall("East", Vector3.new(maxX + THICKNESS / 2, midY, midZ), Vector3.new(THICKNESS, height, depth))
 wall("Ceiling", Vector3.new(midX, top + THICKNESS / 2, midZ), Vector3.new(width + THICKNESS * 2, THICKNESS, depth + THICKNESS * 2))
 
+folder:SetAttribute("MinX", minX)
+folder:SetAttribute("MaxX", maxX)
+folder:SetAttribute("MinZ", minZ)
+folder:SetAttribute("MaxZ", maxZ)
 folder.Parent = map
 print(string.format("[MapBarrier] Walls around X %.0f..%.0f, Z %.0f..%.0f, up to Y %.0f", minX, maxX, minZ, maxZ, top))
