@@ -70,10 +70,9 @@ JumpBalance.TrampolineTiers = {
 	{ Name = "Beach Trampoline", Skin = "Beach", XpPerBounce = 3, Price = 1000, Island = 2, Color = Color3.fromRGB(255, 205, 110) },
 	{ Name = "Cherry Blossom Trampoline", Skin = "CherryBlossom", XpPerBounce = 5, Price = 4000, Island = 3, Color = Color3.fromRGB(255, 160, 205) },
 	-- Islands 4-8 became Snow, Desert, Jungle, Volcano, Candy Sky (2026-10-18).
-	-- Desert and Jungle still borrow the old Crystal / Space skins until they get their own.
 	{ Name = "Snow Trampoline", Skin = "Ice", XpPerBounce = 10, Price = 15000, Island = 4, Color = Color3.fromRGB(150, 220, 255) },
-	{ Name = "Desert Trampoline", Skin = "Crystal", XpPerBounce = 20, Price = 50000, Island = 5, Color = Color3.fromRGB(235, 190, 110) },
-	{ Name = "Jungle Trampoline", Skin = "Space", XpPerBounce = 50, Price = 150000, Island = 6, Color = Color3.fromRGB(70, 170, 80) },
+	{ Name = "Desert Trampoline", Skin = "Desert", XpPerBounce = 20, Price = 50000, Island = 5, Color = Color3.fromRGB(235, 190, 110) },
+	{ Name = "Jungle Trampoline", Skin = "Jungle", XpPerBounce = 50, Price = 150000, Island = 6, Color = Color3.fromRGB(70, 170, 80) },
 	{ Name = "Volcano Trampoline", Skin = "Volcano", XpPerBounce = 120, Price = 500000, Island = 7, Color = Color3.fromRGB(255, 115, 55) },
 	{ Name = "Candy Sky Trampoline", Skin = "Candy", XpPerBounce = 250, Price = 2000000, Island = 8, Color = Color3.fromRGB(255, 115, 185) },
 }
