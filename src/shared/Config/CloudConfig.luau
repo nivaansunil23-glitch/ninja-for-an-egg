@@ -39,7 +39,17 @@ CloudConfig.WorldMargin = 1
 -- line (BranchRatio side clouds per path cloud).
 CloudConfig.PuffsMin = 1
 CloudConfig.PuffsMax = 3
-CloudConfig.BranchRatio = 0.5
+CloudConfig.BranchRatio = 1.3
+
+-- Keep the climb from looking like an obby: each step turns at least MinTurn
+-- degrees from the last one while the top is still far off (urgency below
+-- WanderUntil), rises are uneven (RiseSkew > 1 = more small hops, a few big
+-- ones) and cloud sizes vary by SizeJitter.
+CloudConfig.MinTurn = 50
+CloudConfig.WanderUntil = 0.6
+CloudConfig.RiseSkew = 1.4
+CloudConfig.SizeJitterMin = 0.7
+CloudConfig.SizeJitterMax = 1.4
 
 -- Smooth flat colours, no textures.
 CloudConfig.Color = Color3.fromRGB(248, 249, 255)

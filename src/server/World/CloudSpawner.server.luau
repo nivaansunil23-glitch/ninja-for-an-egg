@@ -336,7 +336,7 @@ local function planZone(zone: BasePart, gapNumber: number, rng: Random, keepOut)
 	end
 
 	local function newCloud(): Plan
-		local inner = baseInner * rng:NextNumber(0.85, 1.15)
+		local inner = baseInner * rng:NextNumber(CloudConfig.SizeJitterMin, CloudConfig.SizeJitterMax)
 		return {
 			Pos = Vector3.zero,
 			Inner = inner,
@@ -496,6 +496,10 @@ local function planZone(zone: BasePart, gapNumber: number, rng: Random, keepOut)
 	local averageStep = (stepMin + stepMax) / 2
 	local averageSpan = 2 * baseInner + (CloudConfig.MinGap + reach(averageStep)) / 2
 
+	-- Direction of the last step, so the next one turns away from it and the climb
+	-- zigzags around the zone instead of reading as a staircase.
+	local lastAngle: number? = nil
+
 	local function tryStep(from: Plan): Plan?
 		local remaining = final.Pos.Y - from.Pos.Y
 		for attempt = 1, CloudConfig.Attempts do
@@ -507,21 +511,29 @@ local function planZone(zone: BasePart, gapNumber: number, rng: Random, keepOut)
 				low = -stepMin -- stuck under something: allow a small drop
 			end
 			low = math.min(low, high)
-			local dy = low + (high - low) * rng:NextNumber()
+			-- Uneven rises: sometimes a big hop, sometimes a near-flat hop sideways.
+			local dy = low + (high - low) * rng:NextNumber() ^ CloudConfig.RiseSkew
 
 			local minGap = if from.Ground
 				then 1
 				else (from.Outer + cloud.Outer + CloudConfig.MinGap) - (from.Inner + cloud.Inner) + 0.05
 			local maxGap = reach(math.abs(dy))
 			if maxGap > minGap then
-				local gap = minGap + (maxGap - minGap) * rng:NextNumber()
+				local gap = minGap + (maxGap - minGap) * rng:NextNumber(0.25, 1)
 				local span = from.Inner + cloud.Inner + gap
 				-- Wander while there's height to spare, head for the top cloud when there isn't.
 				local toFinal = flat(final.Pos - from.Pos)
 				local stepsLeft = math.max(remaining - dy, 0) / averageStep + 1
 				local urgency = math.clamp(toFinal.Magnitude / (stepsLeft * averageSpan * 0.8), 0, 1)
-				local spread = math.pi * math.max(1 - urgency, relax * 0.75)
-				local angle = math.atan2(toFinal.Z, toFinal.X) + (rng:NextNumber() * 2 - 1) * spread
+				local angle
+				if urgency < CloudConfig.WanderUntil and lastAngle then
+					-- Turn 50-180 degrees left or right of the last step.
+					local turn = math.rad(rng:NextNumber(CloudConfig.MinTurn, 180)) * (if rng:NextNumber() < 0.5 then -1 else 1)
+					angle = lastAngle + turn
+				else
+					local spread = math.pi * math.max(1 - urgency ^ 2, relax * 0.75)
+					angle = math.atan2(toFinal.Z, toFinal.X) + (rng:NextNumber() * 2 - 1) * spread
+				end
 				cloud.Pos = from.Pos + Vector3.new(math.cos(angle) * span, dy, math.sin(angle) * span)
 				if
 					cloud.Pos.Y - cloud.Thickness > fromTop + 0.5
@@ -530,6 +542,7 @@ local function planZone(zone: BasePart, gapNumber: number, rng: Random, keepOut)
 					and apart(cloud, { final })
 					and clear(cloud)
 				then
+					lastAngle = angle
 					return cloud
 				end
 			end
