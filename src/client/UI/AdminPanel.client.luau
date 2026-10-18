@@ -242,6 +242,7 @@ local gearCard, gearHeight = card("GearCard", "Gear", gearY, 1)
 buttonRow(gearCard, rowY(1), {
 	{ "All Gear", Theme.Colors.Mint, function() run("AllGear", 0) end },
 	{ "No Gear", Theme.Colors.Red, function() run("NoGear", 0) end },
+	{ "All Trampolines", Theme.Colors.Sky, function() run("AllTrampolines", 0) end },
 })
 
 -- Day/night card: force a phase, skip to the next one, or reset island eggs.

@@ -14,6 +14,7 @@
 --   "CrackEgg"   cracks the egg you're carrying (knocks you down, egg falls out)
 --   "EggLineup"  every island egg in rows in front of you (one row per island) for LINEUP_SECONDS
 --   "AllGear" / "NoGear"   own every shoe and coil tier / none (amount = tier to keep, 0 = none)
+--   "AllTrampolines"  own every trampoline tier (to try equipping them)
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
 local Players = game:GetService("Players")
@@ -211,6 +212,9 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		return true, "Crack!"
 	elseif action == "EggLineup" then
 		return eggLineup(player)
+	elseif action == "AllTrampolines" then
+		PlayerData.SetStat(player, "TrampolineTier", #JumpBalance.TrampolineTiers)
+		return true, "You own every trampoline: equip one in the trampoline shop"
 	elseif action == "AllGear" then
 		GearShop.SetAll(player, true)
 		return true, "You own every shoe and coil"

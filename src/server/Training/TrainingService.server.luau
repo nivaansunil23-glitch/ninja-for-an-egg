@@ -8,7 +8,7 @@
 -- Also here: buying trampoline tiers (the Upgrade prompt on each trampoline,
 -- or a part named "UpgradePad" inside it) and the Jump Boost on/off switch.
 --
--- Player attributes: JumpLevel, JumpXP, TrampolineTier (saved, mirrored by
+-- Player attributes: JumpLevel, JumpXP, TrampolineTier, EquippedTrampoline (saved, mirrored by
 -- PlayerData), Training (true while bouncing), JumpBoost (false when off).
 
 local Players = game:GetService("Players")
@@ -38,6 +38,7 @@ local stoppedRemote = Net.Event("TrainStopped")
 local boostRemote = Net.Event("SetJumpBoost")
 local openShopRemote = Net.Event("OpenTrampolineShop")
 local buyRemote = Net.Function("BuyTrampoline")
+local equipRemote = Net.Function("EquipTrampoline")
 
 local groupReady = pcall(function()
 	if not PhysicsService:IsCollisionGroupRegistered(COLLISION_GROUP) then
@@ -148,7 +149,7 @@ end
 
 local function xpPerHit(player: Player): number
 	local data = PlayerData.Get(player)
-	return JumpBalance.Tier(data and data.TrampolineTier).XpPerBounce
+	return JumpBalance.Tier(data and JumpBalance.UsedTier(data.TrampolineTier, data.EquippedTrampoline)).XpPerBounce
 end
 
 local function addXp(player: Player, amount: number, kind: string)
@@ -293,7 +294,28 @@ buyRemote.OnServerInvoke = function(player, tier)
 		return false, `Not enough money ({Format.Money(entry.Price)})`
 	end
 	PlayerData.SetStat(player, "TrampolineTier", tier)
+	PlayerData.SetStat(player, "EquippedTrampoline", tier) -- a new one is put on straight away
 	return true, `Unlocked the {entry.Name}! +{entry.XpPerBounce} Jump XP every bounce`
+end
+
+-- Use any trampoline you've bought (you own every tier up to TrampolineTier).
+equipRemote.OnServerInvoke = function(player, tier)
+	if type(tier) ~= "number" or tier ~= tier or tier % 1 ~= 0 then
+		return false, "Invalid trampoline"
+	end
+	local data = PlayerData.Get(player)
+	if not data then
+		return false, "Still loading, try again"
+	end
+	local entry = JumpBalance.TrampolineTiers[tier]
+	if not entry then
+		return false, "Unknown trampoline"
+	end
+	if tier > data.TrampolineTier then
+		return false, "Buy it first"
+	end
+	PlayerData.SetStat(player, "EquippedTrampoline", tier)
+	return true, `Using the {entry.Name}: +{entry.XpPerBounce} Jump XP every bounce`
 end
 
 local function promptPartFor(trampoline: Instance): BasePart?

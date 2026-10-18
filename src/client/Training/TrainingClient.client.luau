@@ -312,6 +312,14 @@ local function makeSign(titleColor: Color3)
 	return { Gui = sign, Title = title, Sub = sub }
 end
 
+-- The tier someone's trampoline shows: the one they equipped (or their best).
+local function usedTier(who: Player?): number
+	if not who then
+		return 1
+	end
+	return JumpBalance.UsedTier(who:GetAttribute("TrampolineTier"), who:GetAttribute("EquippedTrampoline"))
+end
+
 -- A trampoline inside a claimed plot uses its owner's tier, any other uses yours.
 local function tierFor(trampoline: Instance): number
 	local node = trampoline.Parent
@@ -319,15 +327,15 @@ local function tierFor(trampoline: Instance): number
 		local owner = node:GetAttribute("OwnerUserId")
 		if type(owner) == "number" and owner > 0 then
 			local ownerPlayer = Players:GetPlayerByUserId(owner)
-			return ownerPlayer and ownerPlayer:GetAttribute("TrampolineTier") or 1
+			return usedTier(ownerPlayer)
 		end
 		node = node.Parent
 	end
-	return player:GetAttribute("TrampolineTier") or 1
+	return usedTier(player)
 end
 
 local function refreshSigns()
-	local tier = JumpBalance.Tier(player:GetAttribute("TrampolineTier"))
+	local tier = JumpBalance.Tier(usedTier(player))
 	local seen = {}
 	for _, kind in { Trampolines.Training, Trampolines.Launch } do
 		for _, trampoline in Trampolines.GetAll(kind) do
@@ -787,10 +795,12 @@ player.CharacterAdded:Connect(function()
 	mustLeave = false
 end)
 
-player:GetAttributeChangedSignal("TrampolineTier"):Connect(function()
-	refreshSigns()
-	refreshSkins()
-end)
+for _, attribute in { "TrampolineTier", "EquippedTrampoline" } do
+	player:GetAttributeChangedSignal(attribute):Connect(function()
+		refreshSigns()
+		refreshSkins()
+	end)
+end
 
 task.spawn(function()
 	while true do

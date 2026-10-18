@@ -81,6 +81,16 @@ function JumpBalance.Tier(tier: number?)
 	return JumpBalance.TrampolineTiers[tier or 1] or JumpBalance.TrampolineTiers[1]
 end
 
+-- The trampoline you use: the one you equipped if you own it, else your best.
+-- owned = TrampolineTier (you own every tier up to it), equipped = EquippedTrampoline.
+function JumpBalance.UsedTier(owned: number?, equipped: number?): number
+	owned = owned or 1
+	if type(equipped) == "number" and equipped >= 1 and equipped <= owned then
+		return equipped
+	end
+	return owned
+end
+
 -- Launch trampoline (Workspace.Map.LaunchTrampoline): throws you this many
 -- times as high as your normal jump to kick off the climb.
 JumpBalance.LaunchHeightMultiplier = 3

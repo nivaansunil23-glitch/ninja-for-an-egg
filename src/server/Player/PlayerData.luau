@@ -29,7 +29,8 @@ local TEMPLATE = {
 	-- Jump training (Training/TrainingService, numbers in Shared.Config.JumpBalance)
 	JumpLevel = 1,
 	JumpXP = 0, -- XP into the current level
-	TrampolineTier = 1,
+	TrampolineTier = 1, -- best trampoline bought (you own every tier up to it)
+	EquippedTrampoline = 0, -- the one you use (0 = your best)
 	IslandReached = 0, -- highest island stood on (0 = base)
 	Gear = {}, -- [gearId] = true
 	Pets = {}, -- [petId] = { Name, Rarity, Weight, Egg, Value, Equipped }
@@ -108,6 +109,7 @@ local function snapshot(data)
 		JumpLevel = data.JumpLevel,
 		JumpXP = data.JumpXP,
 		TrampolineTier = data.TrampolineTier,
+		EquippedTrampoline = data.EquippedTrampoline,
 		IslandReached = data.IslandReached,
 		Gear = data.Gear,
 		Pets = data.Pets,
@@ -133,6 +135,7 @@ local function applyAttributes(player: Player, data)
 	setMirrored(player, "JumpLevel", data.JumpLevel)
 	setMirrored(player, "JumpXP", data.JumpXP)
 	setMirrored(player, "TrampolineTier", data.TrampolineTier)
+	setMirrored(player, "EquippedTrampoline", data.EquippedTrampoline)
 	setMirrored(player, "IslandReached", data.IslandReached)
 end
 

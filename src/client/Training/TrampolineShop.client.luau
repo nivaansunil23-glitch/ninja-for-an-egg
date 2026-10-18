@@ -1,7 +1,8 @@
 -- Trampoline upgrade window. Opens from the "Upgrade" prompt next to a
 -- trampoline. Shows every tier (themed after the islands), what it gives per
--- bounce, and buys the next one. The server checks the price and that you've
--- reached the tier's island (Training/TrainingService).
+-- bounce, and buys the next one. Any one you've bought can be equipped (its
+-- look and its Jump XP). The server checks the price and that you've reached
+-- the tier's island (Training/TrainingService).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +19,7 @@ local player = Players.LocalPlayer
 
 local openRemote = Net.Event("OpenTrampolineShop")
 local buyRemote = Net.Function("BuyTrampoline")
+local equipRemote = Net.Function("EquipTrampoline")
 
 local WINDOW_SIZE = Vector2.new(600, 460)
 local ROW_HEIGHT = 74
@@ -147,16 +149,17 @@ local function refresh()
 	local owned = player:GetAttribute("TrampolineTier") or 1
 	local reached = player:GetAttribute("IslandReached") or 0
 	local money = player:GetAttribute("Money") or 0
-	local current = JumpBalance.Tier(owned)
-	subtitle.Text = `You have the {current.Name}: +{Format.Short(current.XpPerBounce)} Jump XP every bounce and click`
+	local using = JumpBalance.UsedTier(owned, player:GetAttribute("EquippedTrampoline"))
+	local current = JumpBalance.Tier(using)
+	subtitle.Text = `Using the {current.Name}: +{Format.Short(current.XpPerBounce)} Jump XP every bounce and click`
 
 	for tier, row in rows do
 		local entry = row.Entry
 		local text, colors
-		if tier < owned then
-			text, colors = "Owned", Bubbly.Colors.Gray
-		elseif tier == owned then
-			text, colors = "Using", Bubbly.Colors.Mint
+		if tier == using then
+			text, colors = "Equipped", Bubbly.Colors.Mint
+		elseif tier <= owned then
+			text, colors = "Equip", Bubbly.Colors.Sky
 		elseif tier == owned + 1 then
 			if reached < entry.Island then
 				text, colors = `Reach {islandName(entry.Island)}`, Bubbly.Colors.Gray
@@ -176,9 +179,14 @@ local function buy(tier: number)
 	if busy then
 		return
 	end
+	local owned = player:GetAttribute("TrampolineTier") or 1
+	if tier == JumpBalance.UsedTier(owned, player:GetAttribute("EquippedTrampoline")) then
+		return -- already on it
+	end
 	busy = true
+	local remote = if tier <= owned then equipRemote else buyRemote
 	local ok, success, message = pcall(function()
-		return buyRemote:InvokeServer(tier)
+		return remote:InvokeServer(tier)
 	end)
 	busy = false
 	if not ok then
@@ -293,7 +301,7 @@ local function open()
 end
 
 openRemote.OnClientEvent:Connect(open)
-for _, attribute in { "TrampolineTier", "IslandReached", "Money" } do
+for _, attribute in { "TrampolineTier", "EquippedTrampoline", "IslandReached", "Money" } do
 	player:GetAttributeChangedSignal(attribute):Connect(function()
 		if window.Visible then
 			refresh()

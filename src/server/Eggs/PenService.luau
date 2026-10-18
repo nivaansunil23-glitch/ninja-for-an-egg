@@ -231,9 +231,12 @@ local function publishPets(plot)
 	if plot.Model:GetAttribute("PenPets") ~= json then
 		plot.Model:SetAttribute("PenPets", json)
 	end
-	if plot.Model:GetAttribute("PenIncome") ~= total or plot.SignText == nil then
+	-- the sign: name, pen level (changes when you upgrade) and total $/s
+	local level = plot.Level or 1
+	if plot.Model:GetAttribute("PenIncome") ~= total or plot.SignText == nil or plot.SignLevel ~= level then
 		plot.Model:SetAttribute("PenIncome", total)
-		plot.SignText = string.format("%s's Pen\n%s/s", owner.DisplayName, Format.Money(total))
+		plot.SignLevel = level
+		plot.SignText = string.format("%s's Pen\nLevel %d · %s/s", owner.DisplayName, level, Format.Money(total))
 		setSign(plot, plot.SignText)
 	end
 end
