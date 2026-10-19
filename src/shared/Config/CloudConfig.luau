@@ -161,7 +161,8 @@ CloudConfig.Themes = {
 	},
 }
 
--- "Beach Island / Needs 77 Jump" sign on the first cloud of every path.
+-- One small "Beach Island / Needs 77 Jump" sign per gap, on the first cloud of
+-- path 1 only (the user didn't want every path labelled).
 CloudConfig.ShowSigns = true
 
 -- The cloud mesh: ServerStorage.CloudTemplates (any part in it), else

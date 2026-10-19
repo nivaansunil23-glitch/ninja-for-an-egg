@@ -824,9 +824,9 @@ local function addSign(part: BasePart, jump: number, island: Instance?)
 	local name = (tostring(id):gsub("(%l)(%u)", "%1 %2"))
 	local sign = Instance.new("BillboardGui")
 	sign.Name = "ClimbSign"
-	sign.Size = UDim2.fromOffset(240, 80)
+	sign.Size = UDim2.fromOffset(160, 54)
 	sign.StudsOffset = Vector3.new(0, 6, 0)
-	sign.MaxDistance = 160
+	sign.MaxDistance = 120
 	sign.LightInfluence = 0
 	local lines = {
 		{ Text = `⬆️ {name} Island`, Color = Color3.new(1, 1, 1), Y = 0, Height = 0.55 },
@@ -951,7 +951,7 @@ local function buildZone(zone: BasePart, gapNumber: number, plan, rng: Random)
 			floor:SetAttribute("Gap", gapNumber)
 			floor:SetAttribute("Path", index)
 			floor:SetAttribute("Step", step)
-			if CloudConfig.ShowSigns and step == 1 then
+			if CloudConfig.ShowSigns and index == 1 and step == 1 then
 				addSign(floor, plan.Jump, plan.ToIsland)
 			end
 		end
