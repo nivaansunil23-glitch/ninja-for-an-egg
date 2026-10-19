@@ -49,7 +49,7 @@ CloudConfig.WorldMargin = 1
 CloudConfig.Paths = 3
 CloudConfig.SweepMin = 90
 CloudConfig.SweepMax = 300
-CloudConfig.SweepFactor = 0.7
+CloudConfig.SweepFactor = 0.6
 CloudConfig.PathBulge = 0.15
 -- Where each path ends round the island above (degrees from its LandingSpot).
 CloudConfig.EndAngles = { 0, 120, -120 }

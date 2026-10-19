@@ -315,6 +315,7 @@ type Plan = {
 	Thickness: number,
 	Yaw: number,
 	Ground: boolean?,
+	Path: number?, -- which path it's on
 }
 
 local function planZone(zone: BasePart, rng: Random, keepOut)
@@ -341,7 +342,9 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 		CloudConfig.SizeMin,
 		CloudConfig.SizeMax
 	)
-	-- Clouds closer than this in height must not overlap from above.
+	-- Clouds on the same path closer than this in height must not overlap from
+	-- above (so a path never folds back over itself). Clouds on different paths
+	-- only need room to stand: they're one-way, so you jump up through them.
 	local band = maxHeight + CloudConfig.PlayerHeight + baseInner
 
 	-- How far apart (edge to edge) a cloud dy higher can be and still be reachable
@@ -383,7 +386,8 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 
 	local function apart(cloud: Plan, others: { Plan }): boolean
 		for _, other in others do
-			if other ~= cloud and math.abs(cloud.Pos.Y - other.Pos.Y) < band then
+			local within = if other.Path == cloud.Path then band else headroom
+			if other ~= cloud and math.abs(cloud.Pos.Y - other.Pos.Y) < within then
 				if flat(cloud.Pos - other.Pos).Magnitude < cloud.Outer + other.Outer + CloudConfig.MinGap then
 					return false
 				end
@@ -435,6 +439,7 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 	local finals: { Plan } = {}
 	for index = 1, CloudConfig.Paths do
 		local final = newCloud()
+		final.Path = index
 		local finalStep = maxHeight * rng:NextNumber(CloudConfig.FinalStepMin, CloudConfig.FinalStepMax)
 		local endAngle = math.rad(CloudConfig.EndAngles[index] or (index - 1) * 360 / CloudConfig.Paths)
 		local placed = false
@@ -498,14 +503,20 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 	local fromGround = if fromIsland then groundOf(fromIsland) else nil
 	local fromCenter = if fromIsland and fromIsland ~= base then flat(islandCenter(fromIsland)) else axis
 
-	-- Start on the ground below, roughly where the path's guide begins.
+	-- Start on the ground below, at the edge of the island below in the
+	-- direction of where the path's guide begins (on the base: right under it).
 	local function findStart(angle: number, r: number): Plan
 		local start: Plan = { Pos = Vector3.zero, Inner = 0, Outer = 0, Thickness = 0, Yaw = 0, Ground = true }
 		local target = axis + Vector3.new(math.cos(angle), 0, math.sin(angle)) * r
 		start.Pos = Vector3.new(fromCenter.X, fromTop, fromCenter.Z)
-		if fromGround then
-			local dir = flatUnit(fromCenter - target)
-			local distance = flat(fromCenter - target).Magnitude
+		if fromGround and fromIsland ~= base then
+			local dir = flatUnit(target - fromCenter) or Vector3.xAxis
+			local edge, edgeY = edgeAlong(fromGround, fromCenter, dir, fromTop)
+			local point = fromCenter + dir * math.max(edge - 3, 0)
+			start.Pos = Vector3.new(point.X, edgeY, point.Z)
+		elseif fromGround then
+			local dir = flatUnit(axis - target)
+			local distance = flat(axis - target).Magnitude
 			for step = 0, distance + 4, 2 do
 				local point = if dir then target + dir * step else target
 				local y = surfaceAt(fromGround, point.X, point.Z, fromTop)
@@ -518,11 +529,12 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 		return start
 	end
 
-	local paths = {}
-	for index, final in finals do
+	-- Walks one path up from its start to its top cloud. shift (radians) moves
+	-- the start round a bit when an earlier try got stuck.
+	local function walk(index: number, final: Plan, shift: number)
 		local endAngle = angleOf(final.Pos - axis)
 		local endRadius = flat(final.Pos - axis).Magnitude
-		local start = findStart(endAngle - sweeps[index], endRadius)
+		local start = findStart(endAngle - sweeps[index] + shift, endRadius)
 		local startAngle = angleOf(start.Pos - axis)
 		local startRadius = flat(start.Pos - axis).Magnitude
 		-- Wind the planned way round, ending exactly at the top cloud.
@@ -543,6 +555,7 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 			for attempt = 1, CloudConfig.Attempts do
 				local relax = attempt / CloudConfig.Attempts -- get less picky the longer it takes
 				local cloud = newCloud()
+				cloud.Path = index
 				local high = math.min(stepMax, remaining)
 				local low = if remaining > stepMin and relax < 0.5 then stepMin else 0
 				if relax > 0.8 and not from.Ground then
@@ -606,11 +619,28 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 				task.wait()
 			end
 		end
-		if not finished then
-			warn(`[Clouds] {zone.Name} path {index}: couldn't finish the climb ({#main} clouds placed)`)
+		return main, start, finished
+	end
+
+	local paths = {}
+	for index, final in finals do
+		local main, start, finished
+		for _, shift in { 0, 30, -30, 60, -60, 90 } do
+			main, start, finished = walk(index, final, math.rad(shift))
+			if finished then
+				break
+			end
+			-- Stuck: take this try's clouds away and start somewhere else.
+			for _, cloud in main do
+				table.remove(all, table.find(all, cloud))
+			end
 		end
-		table.insert(main, final)
-		table.insert(paths, { Start = start, Clouds = main, Finished = finished })
+		if not finished then
+			warn(`[Clouds] {zone.Name} path {index}: couldn't finish the climb, left it out`)
+		else
+			table.insert(main, final)
+			table.insert(paths, { Start = start, Clouds = main, Finished = finished })
+		end
 	end
 
 	return {
