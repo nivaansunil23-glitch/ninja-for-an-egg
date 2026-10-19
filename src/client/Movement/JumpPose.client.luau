@@ -89,6 +89,41 @@ local function fumblePose(t: number)
 	return pose, weight
 end
 
+-- Lying face down after a cracked egg (Server.Eggs.Knockdown holds the body
+-- flat; this poses the limbs): arms out over the head, legs straight, feet up
+-- a little. Blends in from the fumble's last keyframe and out as they get up.
+local LIE = {
+	ArmL = Vector3.new(0, 0, -2.3), ArmR = Vector3.new(0, 0, 2.3),
+	ElbowL = Vector3.new(0.15, 0, 0), ElbowR = Vector3.new(0.15, 0, 0),
+	LegL = Vector3.new(0, 0, -0.15), LegR = Vector3.new(0, 0, 0.15),
+	KneeL = Vector3.new(-0.45, 0, 0), KneeR = Vector3.new(-0.3, 0, 0),
+}
+local LIE_IN = 0.35 -- seconds to go from the fumble to lying flat
+local LIE_OUT = 0.45 -- seconds at the end to blend back to standing
+
+local function liePose(character)
+	local lieAt, lieUntil = character:GetAttribute("LieAt"), character:GetAttribute("LieUntil")
+	if type(lieAt) ~= "number" or type(lieUntil) ~= "number" then
+		return nil
+	end
+	local now = workspace:GetServerTimeNow()
+	local pose = {}
+	if now - lieAt < LIE_IN then
+		local f = math.clamp((now - lieAt) / LIE_IN, 0, 1)
+		f = f * f * (3 - 2 * f)
+		for role, angles in LIE do
+			pose[role] = FUMBLE[#FUMBLE][2][role]:Lerp(angles, f)
+		end
+		return pose
+	end
+	local w = math.clamp((lieUntil - now) / LIE_OUT, 0, 1)
+	w = w * w * (3 - 2 * w)
+	for role, angles in LIE do
+		pose[role] = angles * w
+	end
+	return pose
+end
+
 -- Joint names per rig: R15 joints sit in the limb, R6 joints in the Torso.
 local R15_JOINTS = {
 	ArmL = { "LeftUpperArm", "LeftShoulder" }, ArmR = { "RightUpperArm", "RightShoulder" },
@@ -168,6 +203,25 @@ RunService.RenderStepped:Connect(function(dt)
 			continue
 		end
 		local owner = Players:GetPlayerFromCharacter(character)
+		local lying = owner and owner:GetAttribute("KnockedDown") and liePose(character)
+		if lying and rig.Humanoid.Health > 0 and (rig.Root.Position - camPos).Magnitude <= MAX_DISTANCE then
+			for role, j in rig.Joints do
+				if j.Motor.Parent and lying[role] then
+					local angles = lying[role]
+					j.Motor.C0 = CFrame.new(j.Base.Position) * CFrame.Angles(angles.X, angles.Y, angles.Z) * j.Base.Rotation
+				end
+			end
+			rig.Posed = true
+			rig.Air = 0
+			rig.Lying = true
+			continue
+		end
+		if rig.Lying then
+			rig.Lying = false
+			if owner == Players.LocalPlayer and rig.Humanoid.Health > 0 then
+				rig.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end
 		local skip = rig.Humanoid.Health <= 0
 			or rig.Humanoid.Sit
 			or (owner and owner:GetAttribute("KnockedDown"))

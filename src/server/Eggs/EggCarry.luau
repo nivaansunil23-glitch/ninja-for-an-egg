@@ -12,7 +12,7 @@
 --
 -- A crack makes you fumble the egg: your arms jerk up, it slips out of your
 -- hands and drops in front of you, cracking the moment it hits the floor
--- ("CRACK!"), then you fall over next to it for a few seconds (Knockdown).
+-- ("CRACK!"), then you lie face down next to it for a few seconds (Knockdown).
 -- Only you can pick it back up for a moment. The crack that breaks it smashes
 -- it on the floor instead ("SMASH!").
 
@@ -379,7 +379,7 @@ local function fallOutOfHands(player, data, from, broken)
 end
 
 -- Cracks the carried egg: the player fumbles it (see fallOutOfHands), then
--- falls over next to it for a few seconds. Enough cracks smash it.
+-- lies face down next to it for a few seconds (Knockdown). Enough cracks smash it.
 local FUMBLE_BEFORE_FALL = 0.5 -- seconds of the fumble before they go down
 function EggCarry.AddCracks(player, amount)
 	local entry = carried[player]
@@ -395,8 +395,15 @@ function EggCarry.AddCracks(player, amount)
 		player.Character:SetAttribute("FumbleAt", workspace:GetServerTimeNow())
 	end
 	task.spawn(fallOutOfHands, player, data, from, broken)
+	-- They end up lying face down just behind where the egg lands, head toward it.
+	local root = getAlive(player)
+	local forward = if root then Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z) else Vector3.zero
+	forward = if forward.Magnitude > 0.1 then forward.Unit else Vector3.new(0, 0, -1)
+	local size = EggFactory.SizeFor(data)
+	local landXZ = from.Position + forward * 2.6
+	local spot = landXZ - forward * (math.max(size.X, size.Z) / 2 + 3.2)
 	task.delay(FUMBLE_BEFORE_FALL, function()
-		Knockdown.Fall(player, KNOCK_SECONDS)
+		Knockdown.Fall(player, KNOCK_SECONDS, spot, forward)
 	end)
 end
 

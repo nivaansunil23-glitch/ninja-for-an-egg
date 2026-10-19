@@ -1,84 +1,102 @@
 --!nonstrict
--- Knocks a player flat for a few seconds: their joints turn into ball sockets
--- (same trick as the guardians' catch) and PlatformStand lets them tip over,
--- with a little shove so they fall onto their back. Then they get back up.
+-- Knocks a player flat for a few seconds: no ragdoll, they slide into lying
+-- face down on the ground (arms out, legs straight) and stay there, then get
+-- back up smoothly. PlatformStand turns the humanoid off, and AlignPosition /
+-- AlignOrientation on the root hold the body in place (the owning client
+-- simulates them, everyone else sees the root through replication). The limb
+-- pose is in Client.Movement.JumpPose (the lying block), driven by the
+-- character's LieAt / LieUntil attributes (server times).
 -- The player gets a "KnockedDown" attribute while they're down.
 
 local Knockdown = {}
 
-local function ragdoll(character: Model)
-	local made = {}
-	for _, motor in character:GetDescendants() do
-		if motor:IsA("Motor6D") and motor.Name ~= "Root" and motor.Name ~= "RootJoint" and motor.Part0 and motor.Part1 then
-			local a0 = Instance.new("Attachment")
-			a0.Name = "KnockA0"
-			a0.CFrame = motor.C0
-			a0.Parent = motor.Part0
-			local a1 = Instance.new("Attachment")
-			a1.Name = "KnockA1"
-			a1.CFrame = motor.C1
-			a1.Parent = motor.Part1
-			local socket = Instance.new("BallSocketConstraint")
-			socket.Name = "Knock"
-			socket.Attachment0 = a0
-			socket.Attachment1 = a1
-			socket.LimitsEnabled = true
-			socket.TwistLimitsEnabled = true
-			socket.UpperAngle = 50
-			socket.TwistLowerAngle = -40
-			socket.TwistUpperAngle = 40
-			socket.Parent = motor.Part0
-			motor.Enabled = false
-			table.insert(made, { motor, a0, a1, socket })
-		end
-	end
-	return made
+local RISE_TIME = 0.45 -- last part of the knockdown: rising back to standing
+
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Exclude
+groundParams.IgnoreWater = true
+
+local function groundBelow(position: Vector3, character: Model): Vector3?
+	groundParams.FilterDescendantsInstances = { character }
+	local hit = workspace:Raycast(position + Vector3.new(0, 4, 0), Vector3.new(0, -14, 0), groundParams)
+	return hit and hit.Position
 end
 
 function Knockdown.IsDown(player: Player): boolean
 	return player:GetAttribute("KnockedDown") == true
 end
 
--- Knocks the player down for `seconds`. Does nothing if they're already down.
-function Knockdown.Fall(player: Player, seconds: number)
+-- Knocks the player down for `seconds`. They lie face down at `spot` (a point
+-- on the ground, head pointing along `facing`), or where they stand if it's
+-- missing or has no ground. Does nothing if they're already down.
+function Knockdown.Fall(player: Player, seconds: number, spot: Vector3?, facing: Vector3?)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if not humanoid or not root or humanoid.Health <= 0 or Knockdown.IsDown(player) then
 		return
 	end
+
+	local forward = facing or root.CFrame.LookVector
+	forward = Vector3.new(forward.X, 0, forward.Z)
+	forward = if forward.Magnitude > 0.1 then forward.Unit else Vector3.new(0, 0, -1)
+	local ground = spot and groundBelow(spot, character)
+	if not ground or math.abs(ground.Y - root.Position.Y) > 10 then
+		ground = groundBelow(root.Position, character) or (root.Position - Vector3.new(0, 3, 0))
+	end
+
+	-- Face down: head points forward, face points at the ground.
+	local right = forward:Cross(Vector3.yAxis)
+	local lie = CFrame.fromMatrix(ground + Vector3.new(0, root.Size.Z / 2 + 0.1, 0), right, forward, Vector3.yAxis)
+	local standY = if humanoid.RigType == Enum.HumanoidRigType.R15 then humanoid.HipHeight + root.Size.Y / 2 else 3
+	local stand = CFrame.lookAt(ground + Vector3.new(0, standY, 0), ground + Vector3.new(0, standY, 0) + forward)
+
 	player:SetAttribute("KnockedDown", true)
+	local now = workspace:GetServerTimeNow()
+	character:SetAttribute("LieAt", now)
+	character:SetAttribute("LieUntil", now + seconds)
 	humanoid.PlatformStand = true
-	local made = ragdoll(character)
 
-	-- Tip over backwards: a short spin around the character's right axis.
 	local attachment = Instance.new("Attachment")
-	attachment.Name = "KnockTip"
+	attachment.Name = "KnockLie"
 	attachment.Parent = root
-	local tip = Instance.new("AngularVelocity")
-	tip.Name = "KnockTip"
-	tip.Attachment0 = attachment
-	tip.RelativeTo = Enum.ActuatorRelativeTo.World
-	tip.MaxTorque = 1e6
-	tip.AngularVelocity = root.CFrame.RightVector * 6
-	tip.Parent = root
-	task.delay(0.35, function()
-		tip:Destroy()
-		attachment:Destroy()
-	end)
+	local hold = Instance.new("AlignPosition")
+	hold.Name = "KnockLie"
+	hold.Mode = Enum.PositionAlignmentMode.OneAttachment
+	hold.Attachment0 = attachment
+	hold.MaxForce = 1e6
+	hold.MaxVelocity = 40
+	hold.Responsiveness = 25
+	hold.Position = lie.Position
+	hold.Parent = root
+	local turn = Instance.new("AlignOrientation")
+	turn.Name = "KnockLie"
+	turn.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	turn.Attachment0 = attachment
+	turn.MaxTorque = 1e6
+	turn.MaxAngularVelocity = 14
+	turn.Responsiveness = 20
+	turn.CFrame = lie.Rotation
+	turn.Parent = root
 
-	task.delay(seconds, function()
-		for _, entry in made do
-			if entry[1].Parent then
-				entry[1].Enabled = true
-			end
-			entry[2]:Destroy()
-			entry[3]:Destroy()
-			entry[4]:Destroy()
+	-- Get back up: swing upright over the last moment, then let go.
+	task.delay(math.max(seconds - RISE_TIME, 0), function()
+		if hold.Parent then
+			hold.Position = stand.Position
+			turn.CFrame = stand.Rotation
 		end
+	end)
+	task.delay(seconds, function()
+		hold:Destroy()
+		turn:Destroy()
+		attachment:Destroy()
 		if humanoid.Parent then
 			humanoid.PlatformStand = false
 			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+		if character.Parent then
+			character:SetAttribute("LieAt", nil)
+			character:SetAttribute("LieUntil", nil)
 		end
 		player:SetAttribute("KnockedDown", nil)
 	end)
