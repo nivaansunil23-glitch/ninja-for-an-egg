@@ -20,8 +20,8 @@
 --                the starting ones (also clears Inventory picks and the jump choice)
 --   "JumpChoice" amount = jump power to pick (0 = max), same as the HUD Jump control
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
---   "RebuildClouds"  amount = seed; rebuilds every gap's cloud paths (World/Clouds)
---   "CloudPaths" amount = 1 show / 0 hide neon lines along the cloud paths
+--   "RebuildClouds"  amount = seed; rebuilds every gap's random clouds (World/Clouds)
+--   "CloudPaths" amount = 1 show / 0 hide: lights up each gap's main climb (neon)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -266,7 +266,7 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 		local Clouds = require(Server:WaitForChild("World"):WaitForChild("Clouds"))
 		if action == "CloudPaths" then
 			Clouds.SetShowPaths(amount ~= 0)
-			return true, if amount ~= 0 then "Showing cloud paths (red, green, blue)" else "Cloud paths hidden"
+			return true, if amount ~= 0 then "Main climb lit up" else "Climb back to normal"
 		end
 		if Clouds.IsBuilding() then
 			return false, "Clouds are already building"

@@ -408,13 +408,13 @@ buttonRow(trampolineCard, rowY(1), {
 	{ "Reset", Theme.Colors.Red, function() run("TrampolineReset", 0) end },
 })
 
--- Clouds card: rebuild every gap's cloud paths with a new random seed, and
--- show/hide neon lines along the 3 paths of each gap (red, green, blue).
+-- Clouds card: rebuild every gap's random clouds with a new seed, and light up
+-- (neon) or reset each gap's main climb.
 local cloudCard = card("CloudCard", "Clouds", trampolineCard.Position.Y.Offset + trampolineCard.Size.Y.Offset + GAP, 1)
 buttonRow(cloudCard, rowY(1), {
 	{ "Rebuild Clouds", Theme.Colors.Sky, function() run("RebuildClouds", math.random(1, 999999)) end },
-	{ "Show Paths", Theme.Colors.Mint, function() run("CloudPaths", 1) end },
-	{ "Hide Paths", Theme.Colors.Red, function() run("CloudPaths", 0) end },
+	{ "Show Climb", Theme.Colors.Mint, function() run("CloudPaths", 1) end },
+	{ "Hide Climb", Theme.Colors.Red, function() run("CloudPaths", 0) end },
 })
 
 -- Small gear button on the right edge, under the HUD's Pets button.

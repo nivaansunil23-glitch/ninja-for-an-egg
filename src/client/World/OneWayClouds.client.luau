@@ -1,5 +1,5 @@
 -- One-way clouds: jump up through a cloud from below, land on it from above.
--- Every cloud's invisible Floor (tagged CloudConfig.OneWayTag, built by server
+-- Every solid cloud (tagged CloudConfig.OneWayTag, built by server
 -- World/Clouds) is solid on the server. Here, just for this player's own
 -- character (which this client simulates), a Floor turns off while your feet
 -- are under its top and back on once they're up at it. The change is local,
