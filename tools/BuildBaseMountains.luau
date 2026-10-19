@@ -96,7 +96,7 @@ local function protectedAt(d, span)
 end
 -- Inner face of the cliff ring: hugs the pens, shops and ponds (+6) so the open
 -- middle stays small (user, 2026-10-19), never past the island edge.
-local MIN_FRONT = 135
+local MIN_FRONT = 100
 local function frontLine(d, span)
 	local p = 0
 	for k = -6, 6 do
@@ -132,7 +132,7 @@ local function windowMul(t)
 	return 0.55 + 0.45 * smooth((nearestWindow(t) - WIN_HALF) / 16)
 end
 
--- Gap1 cloud zone (base to Island1), read live (X -160..122, Z -160..160 on 2026-10-19).
+-- Gap1 cloud zone (base to Island1), read live (X -150..122, Z -125..125 on 2026-10-19).
 local gap1 = map.CloudZones.Gap1
 local BOX_MIN = Vector2.new(gap1.Position.X - gap1.Size.X / 2, gap1.Position.Z - gap1.Size.Z / 2)
 local BOX_MAX = Vector2.new(gap1.Position.X + gap1.Size.X / 2, gap1.Position.Z + gap1.Size.Z / 2)
@@ -356,7 +356,8 @@ for k = 1, #WINDOWS do
 	task.wait()
 end
 
--- Trees and flowers that ended up inside a cliff walk inwards until they're clear.
+-- Decor that ended up inside a cliff goes to ServerStorage.MapBackup (the base is
+-- packed tight, so walking it inwards would drop it on the pens).
 local cliffParts = {}
 for _, d in mountains:GetDescendants() do
 	if d:IsA("BasePart") and (d.Name == "Rock" or d.Name == "Grass") then
@@ -366,28 +367,20 @@ end
 local overlap = OverlapParams.new()
 overlap.FilterType = Enum.RaycastFilterType.Include
 overlap.FilterDescendantsInstances = cliffParts
+local backup = ServerStorage:FindFirstChild("MapBackup") or Instance.new("Folder")
+backup.Name = "MapBackup"
+backup.Parent = ServerStorage
 local moved = 0
 for _, item in base.Scatter:GetChildren() do
 	if item.Name ~= "Pond" and item.Name ~= "WaterfallPond" and item.Name ~= "Waterfall" and item.Name ~= "AmbientFX" then
-		local function blocked()
-			for _, p in if item:IsA("BasePart") then { item } else item:GetDescendants() do
-				if p:IsA("BasePart") and #workspace:GetPartsInPart(p, overlap) > 0 then
-					return true
-				end
+		for _, p in if item:IsA("BasePart") then { item } else item:GetDescendants() do
+			if p:IsA("BasePart") and #workspace:GetPartsInPart(p, overlap) > 0 then
+				item.Parent = backup
+				moved += 1
+				break
 			end
-			return false
-		end
-		local pos = item:GetPivot().Position
-		local inward = Vector3.new(-pos.X, 0, -pos.Z).Unit
-		local steps = 0
-		while blocked() and steps < 30 do
-			item:PivotTo(item:GetPivot() + inward * 2)
-			steps += 1
-		end
-		if steps > 0 then
-			moved += 1
 		end
 	end
 end
 
-print(`[Mountains] {#plan} cliffs, {nLedge} ledges, {moved} scatter items moved`)
+print(`[Mountains] {#plan} cliffs, {nLedge} ledges, {moved} scatter items moved to MapBackup`)
