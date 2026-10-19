@@ -393,6 +393,14 @@ for n = 1, 8 do
 end
 buttonRow(teleportCard, rowY(1), teleportButtons)
 
+-- Trampoline card: step your trampoline tier up one (bought and equipped, to
+-- see each skin on your own trampoline) or back to Basic.
+local trampolineCard = card("TrampolineCard", "Trampoline", teleportCard.Position.Y.Offset + teleportCard.Size.Y.Offset + GAP, 1)
+buttonRow(trampolineCard, rowY(1), {
+	{ "Tier +1", Theme.Colors.Mint, function() run("TrampolineUp", 0) end },
+	{ "Reset", Theme.Colors.Red, function() run("TrampolineReset", 0) end },
+})
+
 -- Small gear button on the right edge, under the HUD's Pets button.
 local adminButton = Components.Button({
 	Name = "AdminButton",

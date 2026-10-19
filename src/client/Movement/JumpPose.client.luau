@@ -14,6 +14,7 @@ local RunService = game:GetService("RunService")
 
 local MAX_DISTANCE = 160 -- characters further than this from the camera aren't posed
 local SPEED_RANGE = 28 -- studs/s of vertical speed for a full rise or fall pose
+local PUSH_SECONDS = 0.18 -- how long the push-off pose lasts after a bounce
 local AIR_DELAY = 0.08 -- seconds in the air before the pose starts (skips tiny bumps)
 
 -- Rotations in the torso's frame (X right, Y up, Z back), as radians.
@@ -30,6 +31,14 @@ local POSES = {
 		ElbowL = Vector3.new(1.3, 0, 0), ElbowR = Vector3.new(1.3, 0, 0),
 		LegL = Vector3.new(1.45, 0, -0.12), LegR = Vector3.new(1.45, 0, 0.12),
 		KneeL = Vector3.new(-1.9, 0, 0), KneeR = Vector3.new(-1.9, 0, 0),
+	},
+	-- Push: knees bent, arms swinging down, for a moment after a big kick up
+	-- (a trampoline bounce), so you push off the mat instead of just floating.
+	Push = {
+		ArmL = Vector3.new(-0.5, 0, -0.2), ArmR = Vector3.new(-0.5, 0, 0.2),
+		ElbowL = Vector3.new(0.3, 0, 0), ElbowR = Vector3.new(0.3, 0, 0),
+		LegL = Vector3.new(0.7, 0, -0.08), LegR = Vector3.new(0.7, 0, 0.08),
+		KneeL = Vector3.new(-1.1, 0, 0), KneeR = Vector3.new(-1.1, 0, 0),
 	},
 	Fall = {
 		ArmL = Vector3.new(0.35, 0, -1.55), ArmR = Vector3.new(0.35, 0, 1.55),
@@ -263,12 +272,18 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 
 		local vy = rig.Root.AssemblyLinearVelocity.Y
+		if rig.LastVy and vy > 8 and vy - rig.LastVy > 20 then
+			rig.PushAt = os.clock() -- bounced: push off the mat
+		end
+		rig.LastVy = vy
+		local push = if rig.PushAt then math.clamp(1 - (os.clock() - rig.PushAt) / PUSH_SECONDS, 0, 1) else 0
 		local rise = math.clamp((vy - 4) / SPEED_RANGE, 0, 1)
 		local fall = math.clamp((-vy - 4) / SPEED_RANGE, 0, 1)
 		local tuck = math.max(0, 1 - rise - fall)
 		for role, j in rig.Joints do
 			if j.Motor.Parent then
-				local angles = (POSES.Rise[role] * rise + POSES.Tuck[role] * tuck + POSES.Fall[role] * fall) * rig.Air
+				local angles = (POSES.Rise[role] * rise + POSES.Tuck[role] * tuck + POSES.Fall[role] * fall) * (1 - push)
+				angles = (angles + POSES.Push[role] * push) * rig.Air
 				-- rotate about the joint in the torso's frame, keeping the joint's own offset
 				j.Motor.C0 = CFrame.new(j.Base.Position) * CFrame.Angles(angles.X, angles.Y, angles.Z) * j.Base.Rotation
 			end

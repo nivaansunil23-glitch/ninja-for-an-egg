@@ -11,8 +11,9 @@
 --
 -- The bouncing runs here because a character's physics belong to its client.
 -- Training/TrainingService on the server checks every bounce and click before
--- it gives XP. Trampolines also show your tier's themed skin from
--- ReplicatedStorage.TrampolineSkins when the map has one.
+-- it gives XP. Each plot's trampoline shows its owner's tier skin from
+-- ReplicatedStorage.TrampolineSkins (empty plots stay Basic), and every
+-- trampoline's mat squashes and springs back when anyone bounces on it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -320,18 +321,49 @@ local function usedTier(who: Player?): number
 	return JumpBalance.UsedTier(who:GetAttribute("TrampolineTier"), who:GetAttribute("EquippedTrampoline"))
 end
 
--- A trampoline inside a claimed plot uses its owner's tier, any other uses yours.
+-- A trampoline in a claimed plot shows its owner's tier. Empty plots (and any
+-- trampoline outside a plot) stay Basic, so your upgrades only ever change
+-- your own trampoline.
 local function tierFor(trampoline: Instance): number
-	local node = trampoline.Parent
-	while node and node ~= Workspace do
-		local owner = node:GetAttribute("OwnerUserId")
-		if type(owner) == "number" and owner > 0 then
-			local ownerPlayer = Players:GetPlayerByUserId(owner)
-			return usedTier(ownerPlayer)
-		end
-		node = node.Parent
+	local owner = Trampolines.OwnerUserId(trampoline)
+	if owner and owner > 0 then
+		return usedTier(Players:GetPlayerByUserId(owner))
 	end
-	return usedTier(player)
+	return 1
+end
+
+-- A small sign over the upgrade spot (UpgradePad) of your own trampoline: the
+-- next tier and its price. Sized in studs like the other sign.
+local upgradeSigns = {} -- [trampoline] = { Gui, Title, Sub }
+
+local function refreshUpgradeSign(trampoline: Instance, mine: boolean)
+	local spot = trampoline:FindFirstChild("UpgradePad", true)
+	local sign = upgradeSigns[trampoline]
+	if not (mine and spot and spot:IsA("BasePart")) then
+		if sign then
+			sign.Gui.Enabled = false
+		end
+		return
+	end
+	if not sign then
+		sign = makeSign(GOLD)
+		sign.Gui.Name = "TrampolineUpgradeSign"
+		sign.Gui.Size = UDim2.fromScale(6, 2.4)
+		sign.Gui.StudsOffset = Vector3.new(0, spot.Size.Y / 2 + 1.8, 0)
+		sign.Gui.MaxDistance = 50
+		upgradeSigns[trampoline] = sign
+	end
+	sign.Gui.Adornee = spot
+	sign.Gui.Enabled = session == nil
+	local owned = player:GetAttribute("TrampolineTier") or 1
+	local nextTier = JumpBalance.TrampolineTiers[owned + 1]
+	if nextTier then
+		sign.Title.Text = "UPGRADE"
+		sign.Sub.Text = `{(nextTier.Name:gsub(" Trampoline$", ""))}: {Format.Money(nextTier.Price)}`
+	else
+		sign.Title.Text = "MAX TIER"
+		sign.Sub.Text = "Equip any in the shop"
+	end
 end
 
 local function refreshSigns()
@@ -360,6 +392,7 @@ local function refreshSigns()
 				sign.Gui.Enabled = pad ~= nil and session == nil and mine
 				sign.Title.Text = `+{Format.Short(tier.XpPerBounce)} Jump XP`
 				sign.Sub.Text = `Tier {tierFor(trampoline)}: {own.Name}`
+				refreshUpgradeSign(trampoline, mine)
 			end
 		end
 	end
@@ -369,15 +402,35 @@ local function refreshSigns()
 			signs[trampoline] = nil
 		end
 	end
+	for trampoline, sign in upgradeSigns do
+		if not seen[trampoline] then
+			sign.Gui:Destroy()
+			upgradeSigns[trampoline] = nil
+		end
+	end
 end
 
--- Themed skins: a trampoline in a claimed plot shows its owner's tier, any
--- other trampoline shows yours. Only changes what you see: the trampoline's
--- own mesh (its "Skin" attribute says which look it already has, Basic if
--- unset) is hidden and the skin model is shown in its place. Skins have their
--- pivot at the bottom centre and get scaled to the trampoline's width.
+-- Looks: every trampoline (training and launch) is drawn by a local copy, so
+-- the mat can squash down when someone lands and spring back, and skins can be
+-- swapped. A training trampoline shows its plot owner's tier skin from
+-- ReplicatedStorage.TrampolineSkins (empty plots stay Basic); the launch
+-- trampoline copies its own parts. Only changes what you see: the real parts
+-- (which you stand on) are hidden with LocalTransparencyModifier. A look is
+-- scaled to the trampoline's width and its bottom is put on the ground under
+-- it, so no skin sinks into the floor whatever its pivot or height.
 
-local skins = {} -- [trampoline] = { Name, Model }
+local LOOK_KINDS = { Trampolines.Training, Trampolines.Launch }
+local SQUASH_DEPTH = 0.2 -- how far the mat sinks on a training bounce (share of its height)
+local LAUNCH_SQUASH_DEPTH = 0.3
+local SQUASH_IN = 0.07 -- seconds to sink
+local SQUASH_SECONDS = 0.9 -- then wobbles back up for this long
+local WOBBLES_PER_SECOND = 2.8
+local SPREAD = 0.35 -- it widens a little as it squashes
+
+local looks = {} -- [trampoline] = { Name, Model, Bottom: CFrame, Parts = { { Part, Offset, Size } }, Hit, Depth }
+local lookFolder = Instance.new("Folder")
+lookFolder.Name = "TrampolineLooks"
+lookFolder.Parent = Workspace
 
 -- The trampoline's visible parts (not the invisible pads).
 local function lookParts(trampoline: Instance): { BasePart }
@@ -397,74 +450,209 @@ local function hideOriginal(trampoline: Instance, hidden: boolean)
 	end
 end
 
-local function applySkin(trampoline: Instance)
-	local folder = ReplicatedStorage:FindFirstChild(SKIN_FOLDER)
-	local skinName = JumpBalance.Tier(tierFor(trampoline)).Skin
-	local builtIn = trampoline:GetAttribute("Skin") or "Basic"
-	local source = folder and folder:FindFirstChild(skinName)
-	local wanted = if skinName ~= builtIn and source then skinName else nil
+-- Lowest point of some parts, and how wide they are.
+local function partsBottom(parts: { BasePart }): (number, number)
+	local bottom, width = math.huge, 0
+	for _, part in parts do
+		local cf, half = part.CFrame, part.Size / 2
+		local halfY = math.abs(cf.RightVector.Y) * half.X + math.abs(cf.UpVector.Y) * half.Y + math.abs(cf.LookVector.Y) * half.Z
+		bottom = math.min(bottom, cf.Position.Y - halfY)
+		width = math.max(width, part.Size.X, part.Size.Z)
+	end
+	return bottom, width
+end
 
-	local current = skins[trampoline]
-	if current and current.Name == wanted and current.Model.Parent then
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Exclude
+
+-- Where the look's bottom goes: the trampoline's own bottom, or the ground
+-- under it if that's higher.
+local function bottomFor(trampoline: Instance, ownBottom: number, center: Vector3): number
+	local ignore = { trampoline, lookFolder }
+	for _, other in Players:GetPlayers() do
+		if other.Character then
+			table.insert(ignore, other.Character)
+		end
+	end
+	groundParams.FilterDescendantsInstances = ignore
+	local hit = Workspace:Raycast(Vector3.new(center.X, ownBottom + 3, center.Z), Vector3.new(0, -8, 0), groundParams)
+	return if hit and hit.Position.Y > ownBottom then hit.Position.Y else ownBottom
+end
+
+local function wantedLook(trampoline: Instance, kind: string): (Instance?, string)
+	if kind == Trampolines.Training then
+		local skinName = JumpBalance.Tier(tierFor(trampoline)).Skin
+		local folder = ReplicatedStorage:FindFirstChild(SKIN_FOLDER)
+		local source = folder and folder:FindFirstChild(skinName)
+		if source and (source:IsA("Model") or source:IsA("BasePart")) then
+			return source, skinName
+		end
+	end
+	return nil, "Own" -- a copy of its own parts
+end
+
+local function makeLook(trampoline: Instance, source: Instance?, parts: { BasePart }): Model
+	local model = Instance.new("Model")
+	if source then
+		local copy = source:Clone()
+		if copy:IsA("BasePart") then
+			copy.Parent = model
+		else
+			for _, child in copy:GetChildren() do
+				child.Parent = model
+			end
+		end
+	else
+		for _, part in parts do
+			part:Clone().Parent = model
+		end
+	end
+	for _, item in model:GetDescendants() do
+		if item:IsA("ProximityPrompt") or item:IsA("BillboardGui") or item:IsA("LuaSourceContainer") or item:IsA("JointInstance") then
+			item:Destroy()
+		elseif item:IsA("BasePart") then
+			item.Anchored = true
+			item.CanCollide = false
+			item.CanQuery = false
+			item.CanTouch = false
+			item.LocalTransparencyModifier = 0
+		end
+	end
+	return model
+end
+
+local function dropLook(trampoline: Instance)
+	local look = looks[trampoline]
+	if look then
+		look.Model:Destroy()
+		looks[trampoline] = nil
+		if trampoline.Parent then
+			hideOriginal(trampoline, false)
+		end
+	end
+end
+
+local function applyLook(trampoline: Instance, kind: string)
+	local source, name = wantedLook(trampoline, kind)
+	local current = looks[trampoline]
+	if current and current.Name == name and current.Model.Parent then
 		hideOriginal(trampoline, true) -- parts that streamed back in would show again
 		return
 	end
-	if current then
-		current.Model:Destroy()
-		skins[trampoline] = nil
-		hideOriginal(trampoline, false)
-	end
-	if not wanted or not (source:IsA("Model") or source:IsA("BasePart")) then
-		return
-	end
+	dropLook(trampoline)
 
-	local width = 0
-	for _, part in lookParts(trampoline) do
-		width = math.max(width, part.Size.X, part.Size.Z)
-	end
+	local parts = lookParts(trampoline)
+	local ownBottom, width = partsBottom(parts)
 	if width < 1 then
 		return -- not streamed in yet
 	end
-	local skin = source:Clone()
-	if skin:IsA("BasePart") then
-		local holder = Instance.new("Model")
-		holder.WorldPivot = skin:GetPivot()
-		skin.Parent = holder
-		skin = holder
+	local model = makeLook(trampoline, source, parts)
+	model.Name = "TrampolineLook"
+	local pivot = trampoline:GetPivot()
+	local turn = pivot.Rotation
+	if source then
+		local _, size = model:GetBoundingBox()
+		local skinWidth = math.max(size.X, size.Z)
+		if skinWidth > 0.01 then
+			model:ScaleTo(model:GetScale() * width / skinWidth)
+		end
+		model:PivotTo(CFrame.new(pivot.Position) * turn)
 	end
-	skin.Name = "TrampolineSkin"
-	for _, part in skin:GetDescendants() do
+	-- Sit the look's bottom on the ground, centred on the trampoline.
+	local bottomY = bottomFor(trampoline, ownBottom, pivot.Position)
+	local box, size = model:GetBoundingBox()
+	local shift = if source then Vector3.new(pivot.X - box.X, 0, pivot.Z - box.Z) else Vector3.zero
+	model:PivotTo(model:GetPivot() + shift + Vector3.new(0, bottomY - (box.Y - size.Y / 2), 0))
+
+	local bottom = CFrame.new(pivot.X, bottomY, pivot.Z) * turn
+	local list = {}
+	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") then
-			part.Anchored = true
-			part.CanCollide = false
-			part.CanQuery = false
-			part.CanTouch = false
+			table.insert(list, { Part = part, Offset = bottom:ToObjectSpace(part.CFrame), Size = part.Size })
 		end
 	end
-	local _, skinSize = skin:GetBoundingBox()
-	local skinWidth = math.max(skinSize.X, skinSize.Z)
-	if skinWidth > 0.01 then
-		skin:ScaleTo(skin:GetScale() * width / skinWidth)
-	end
-	skin:PivotTo(trampoline:GetPivot())
-	skin.Parent = Workspace
-	skins[trampoline] = { Name = wanted, Model = skin }
+	model.Parent = lookFolder
+	looks[trampoline] = { Name = name, Model = model, Bottom = bottom, Parts = list, Hit = nil, Depth = 0 }
 	hideOriginal(trampoline, true)
 end
 
 local function refreshSkins()
 	local alive = {}
-	for _, trampoline in Trampolines.GetAll(Trampolines.Training) do
-		alive[trampoline] = true
-		applySkin(trampoline)
+	for _, kind in LOOK_KINDS do
+		for _, trampoline in Trampolines.GetAll(kind) do
+			alive[trampoline] = true
+			applyLook(trampoline, kind)
+		end
 	end
-	for trampoline, skin in skins do
+	for trampoline in looks do
 		if not alive[trampoline] then
-			skin.Model:Destroy()
-			skins[trampoline] = nil
+			dropLook(trampoline)
 		end
 	end
 end
+
+-- Mat squash: sinks fast when someone lands, then springs back with a wobble.
+local function squash(trampoline: Instance, depth: number)
+	local look = looks[trampoline]
+	if look then
+		look.Hit = os.clock()
+		look.Depth = depth
+	end
+end
+
+local function drawSquash(look, amount: number)
+	local down, wide = 1 - amount, 1 + amount * SPREAD
+	for _, item in look.Parts do
+		local part, offset = item.Part, item.Offset
+		if part.Parent then
+			local p = offset.Position
+			part.Size = item.Size * Vector3.new(wide, down, wide)
+			part.CFrame = look.Bottom * CFrame.new(p.X * wide, p.Y * down, p.Z * wide) * offset.Rotation
+		end
+	end
+end
+
+-- Spot a bounce from anyone's sudden kick upwards over a trampoline, so you see
+-- other players' trampolines squash too.
+local lastRise = setmetatable({}, { __mode = "k" }) -- [character] = vertical speed last frame
+
+RunService.RenderStepped:Connect(function()
+	for _, other in Players:GetPlayers() do
+		local character = other.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root then
+			local vy = root.AssemblyLinearVelocity.Y
+			local before = lastRise[character]
+			lastRise[character] = vy
+			if before and vy > 8 and vy - before > 20 then
+				for _, kind in LOOK_KINDS do
+					local trampoline = Trampolines.FindAt(root.Position, kind, 2, STAND_ABOVE_PAD + 3)
+					if trampoline then
+						local depth = if kind == Trampolines.Launch then LAUNCH_SQUASH_DEPTH else SQUASH_DEPTH
+						squash(trampoline, depth * math.clamp((vy - before) / 90, 0.6, 1))
+						break
+					end
+				end
+			end
+		end
+	end
+
+	local now = os.clock()
+	for _, look in looks do
+		if look.Hit then
+			local t = now - look.Hit
+			if t >= SQUASH_SECONDS then
+				look.Hit = nil
+				drawSquash(look, 0)
+			elseif t < SQUASH_IN then
+				drawSquash(look, look.Depth * math.sin(t / SQUASH_IN * math.pi / 2))
+			else
+				local after = t - SQUASH_IN
+				drawSquash(look, look.Depth * math.exp(-6 * after) * math.cos(2 * math.pi * WOBBLES_PER_SECOND * after))
+			end
+		end
+	end
+end)
 
 -- The upgrade prompt would pop up the whole time you bounce, so hide it then.
 -- Other players' trampolines never show it: you can only upgrade your own.
@@ -569,7 +757,8 @@ local function endTrick()
 	end
 end
 
-local function playTrick(character: Model, duration: number)
+-- `lead` lets you leave the mat before the flip starts, like a real trampoline.
+local function playTrick(character: Model, duration: number, lead: number?)
 	local joint = rootJoint(character)
 	if not joint then
 		return
@@ -579,7 +768,7 @@ local function playTrick(character: Model, duration: number)
 	local axis = TRICK_AXES[math.random(#TRICK_AXES)]
 	local token = {}
 	trick = { Joint = joint, Base = base, Token = token }
-	local start = os.clock()
+	local start = os.clock() + (lead or 0)
 	task.spawn(function()
 		while trick and trick.Token == token and joint.Parent do
 			local t = math.clamp((os.clock() - start) / duration, 0, 1)
@@ -695,8 +884,8 @@ RunService.Heartbeat:Connect(function()
 			session.LastBounce = now
 			root.AssemblyLinearVelocity = Vector3.new(pull.X, bounceSpeed(), pull.Z)
 			bounceRemote:FireServer()
-			-- Flip through most of the time in the air.
-			playTrick(character, math.clamp(2 * bounceSpeed() / Workspace.Gravity * 0.8, 0.35, 1.2))
+			-- Flip through most of the time in the air, starting just after takeoff.
+			playTrick(character, math.clamp(2 * bounceSpeed() / Workspace.Gravity * 0.72, 0.35, 1.1), 0.07)
 		else
 			root.AssemblyLinearVelocity = Vector3.new(pull.X, velocity.Y, pull.Z)
 		end
