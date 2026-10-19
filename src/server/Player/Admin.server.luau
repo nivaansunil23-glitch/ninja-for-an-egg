@@ -20,6 +20,8 @@
 --                the starting ones (also clears Inventory picks and the jump choice)
 --   "JumpChoice" amount = jump power to pick (0 = max), same as the HUD Jump control
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
+--   "RebuildClouds"  amount = seed; rebuilds every gap's cloud paths (World/Clouds)
+--   "CloudPaths" amount = 1 show / 0 hide neon lines along the cloud paths
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -259,6 +261,20 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"
+	end
+	elseif action == "RebuildClouds" or action == "CloudPaths" then
+		-- Required here so a missing map never stops the admin panel loading.
+		local Clouds = require(Server:WaitForChild("World"):WaitForChild("Clouds"))
+		if action == "CloudPaths" then
+			Clouds.SetShowPaths(amount ~= 0)
+			return true, if amount ~= 0 then "Showing cloud paths (red, green, blue)" else "Cloud paths hidden"
+		end
+		if Clouds.IsBuilding() then
+			return false, "Clouds are already building"
+		end
+		local seed = math.floor(amount)
+		task.spawn(Clouds.BuildAll, seed)
+		return true, `Rebuilding clouds (seed {seed}), takes a few seconds`
 	end
 	return false, "Unknown action"
 end
