@@ -261,7 +261,6 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 	elseif action == "ReadyEggs" then
 		local n = PenService.ReadyAll(player)
 		return n > 0, if n > 0 then n .. " eggs ready to hatch" else "No eggs in your pen"
-	end
 	elseif action == "RebuildClouds" or action == "CloudPaths" then
 		-- Required here so a missing map never stops the admin panel loading.
 		local Clouds = require(Server:WaitForChild("World"):WaitForChild("Clouds"))
