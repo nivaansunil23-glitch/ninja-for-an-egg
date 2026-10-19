@@ -10,7 +10,7 @@
 -- "LOW-POLY Mountain-Border" 6865341186 and "Low-Poly Mountain Wall" 6865334143,
 -- scripts stripped) and IslandChunk (grass cap + rock cone for the ledges).
 --
--- Kept clear: pens, shops, trampolines, spawn and ponds (+7 studs), the base's
+-- Kept clear: pens, shops, trampolines, spawn and ponds (+8 studs), the base's
 -- floating islets, and the Gap1 cloud zone (pillars poke in 10 studs at most).
 -- Tops stay under Y 140, below Island1 and the Gap2 cloud zone.
 
@@ -56,7 +56,7 @@ task.wait()
 -- How far out the things we must not cover reach, per degree.
 local protected = { map.Pens, map.Shops, map.LaunchTrampoline, base.SpawnArea }
 for _, c in base.Scatter:GetChildren() do
-	if c.Name == "Pond" then
+	if c.Name == "Pond" or c.Name == "WaterfallPond" then
 		table.insert(protected, c)
 	end
 end
@@ -94,9 +94,15 @@ local function protectedAt(d, span)
 	end
 	return m
 end
--- Inner face of the cliff ring: just over the island edge, never on the pens.
+-- Inner face of the cliff ring: hugs the pens, shops and ponds (+8) so the open
+-- middle stays small (user, 2026-10-19), never past the island edge.
+local MIN_FRONT = 140
 local function frontLine(d, span)
-	return math.max(edgeAt(d) - 5, protectedAt(d, span) + 7)
+	local p = 0
+	for k = -6, 6 do
+		p = math.max(p, protectedAt(d + k, span))
+	end
+	return math.min(edgeAt(d) - 5, math.max(MIN_FRONT, p + 8))
 end
 
 -- Windows line up with the base Rim's six gaps.
@@ -212,6 +218,16 @@ local function makePillar(kind, x, z, bottomY, topY, W)
 	cap.Color = GRASS[rng:NextInteger(1, #GRASS)]
 	rock.Parent = model
 	cap.Parent = model
+	-- Tall pillars stretch the rock's notched top below the cap, so sky shows through.
+	-- A short unstretched copy of the rock fills the top under the cap.
+	if rockSize.Y > 40 then
+		local collarH = math.min(rockSize.Y * 0.5, W * 0.7)
+		local collar = rock:Clone()
+		collar.Name = "RockTop"
+		collar.Size = Vector3.new(rockSize.X * 0.96, collarH, rockSize.Z * 0.96)
+		collar.CFrame = rock.CFrame * CFrame.new(0, rockSize.Y / 2 - 0.2 - collarH / 2, 0)
+		collar.Parent = model
+	end
 	model.PrimaryPart = rock
 	return model
 end
@@ -349,7 +365,7 @@ overlap.FilterType = Enum.RaycastFilterType.Include
 overlap.FilterDescendantsInstances = cliffParts
 local moved = 0
 for _, item in base.Scatter:GetChildren() do
-	if item.Name ~= "Pond" and item.Name ~= "AmbientFX" then
+	if item.Name ~= "Pond" and item.Name ~= "WaterfallPond" and item.Name ~= "Waterfall" and item.Name ~= "AmbientFX" then
 		local function blocked()
 			for _, p in if item:IsA("BasePart") then { item } else item:GetDescendants() do
 				if p:IsA("BasePart") and #workspace:GetPartsInPart(p, overlap) > 0 then
