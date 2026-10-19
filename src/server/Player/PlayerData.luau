@@ -33,6 +33,11 @@ local TEMPLATE = {
 	EquippedTrampoline = 0, -- the one you use (0 = your best)
 	IslandReached = 0, -- highest island stood on (0 = base)
 	Gear = {}, -- [gearId] = true
+	-- What you picked in the Inventory (0 = your best). Player/Loadout.
+	EquippedShoes = 0,
+	EquippedCoil = 0,
+	EquippedVertex = 0,
+	JumpChoice = 0, -- the jump power you picked (0 = your max), Player/JumpPower caps it
 	Pets = {}, -- [petId] = { Name, Rarity, Weight, Egg, Value, Equipped }
 	Index = {}, -- [petName] = true once you've ever owned that pet (Pet Index)
 	IndexClaimed = {}, -- [eggId] = true once that egg's Index reward is claimed
@@ -112,6 +117,10 @@ local function snapshot(data)
 		EquippedTrampoline = data.EquippedTrampoline,
 		IslandReached = data.IslandReached,
 		Gear = data.Gear,
+		EquippedShoes = data.EquippedShoes,
+		EquippedCoil = data.EquippedCoil,
+		EquippedVertex = data.EquippedVertex,
+		JumpChoice = data.JumpChoice,
 		Pets = data.Pets,
 		Index = data.Index,
 		IndexClaimed = data.IndexClaimed,
@@ -137,6 +146,7 @@ local function applyAttributes(player: Player, data)
 	setMirrored(player, "TrampolineTier", data.TrampolineTier)
 	setMirrored(player, "EquippedTrampoline", data.EquippedTrampoline)
 	setMirrored(player, "IslandReached", data.IslandReached)
+	setMirrored(player, "JumpChoice", data.JumpChoice)
 end
 
 local function queueSync(player: Player)

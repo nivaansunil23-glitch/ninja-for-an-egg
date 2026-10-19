@@ -16,6 +16,9 @@
 --   "AllGear" / "NoGear"   own every shoe and coil tier / none (amount = tier to keep, 0 = none)
 --   "AllTrampolines"  own every trampoline tier (to try equipping them)
 --   "TrampolineUp" / "TrampolineReset"  trampoline tier +1 (bought and equipped) / back to Basic
+--   "AllItems" / "NoItems"  own every shoe, coil, vertex and trampoline / back to
+--                the starting ones (also clears Inventory picks and the jump choice)
+--   "JumpChoice" amount = jump power to pick (0 = max), same as the HUD Jump control
 --   "Teleport"   amount = island number (1-8) to stand on it, 0 = back to your pen
 
 local Players = game:GetService("Players")
@@ -36,6 +39,7 @@ local EggFactory = require(Server:WaitForChild("Eggs"):WaitForChild("EggFactory"
 local PenService = require(Server:WaitForChild("Eggs"):WaitForChild("PenService"))
 local GearShop = require(Server:WaitForChild("Shops"):WaitForChild("GearShop"))
 local EggConfig = require(Shared:WaitForChild("EggConfig"))
+local VertexConfig = require(Shared:WaitForChild("Config"):WaitForChild("VertexConfig"))
 
 local MAX_MONEY_PER_CLICK = 1e12
 local LINEUP_SECONDS = 25
@@ -225,6 +229,24 @@ Net.Function("AdminAction").OnServerInvoke = function(player, action, amount)
 	elseif action == "AllTrampolines" then
 		PlayerData.SetStat(player, "TrampolineTier", #JumpBalance.TrampolineTiers)
 		return true, "You own every trampoline: equip one in the trampoline shop"
+	elseif action == "AllItems" or action == "NoItems" then
+		local own = action == "AllItems"
+		data.VertexTier = if own then #VertexConfig.Tiers else 1
+		data.TrampolineTier = if own then #JumpBalance.TrampolineTiers else 1
+		if not own then
+			data.EquippedTrampoline = 0
+			data.EquippedShoes = 0
+			data.EquippedCoil = 0
+			data.EquippedVertex = 0
+			data.JumpChoice = 0
+		end
+		GearShop.SetAll(player, own) -- marks dirty, refreshes worn gear and jump
+		return true, if own then "You own every shop item: see your Inventory" else "Shop items back to the starting ones"
+	elseif action == "JumpChoice" then
+		data.JumpChoice = if amount <= 0 then 0 else math.floor(amount)
+		PlayerData.MarkDirty(player)
+		JumpPower.Refresh(player)
+		return true, "Jump " .. tostring(player:GetAttribute("JumpPower"))
 	elseif action == "AllGear" then
 		GearShop.SetAll(player, true)
 		return true, "You own every shoe and coil"

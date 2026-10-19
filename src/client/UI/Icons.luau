@@ -6,7 +6,7 @@
 --   Icons.Make("Paw", parent, { Size = ..., Silhouette = true })      -- dark locked look
 --
 -- Names: Cash, Coin, Shoe, Cart, Book, Paw, Trophy, Egg, Bag, Gear, Lock,
--- Star, Rocket, Check, Sun, Moon, Coil. Sizes are in pixels so the outlines can match the icon size.
+-- Star, Rocket, Check, Sun, Moon, Coil, Gem, Trampoline. Sizes are in pixels so the outlines can match the icon size.
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 
@@ -137,6 +137,27 @@ function DRAW.Coil(p, color: Color3?)
 	end
 	p.Shape(0.5, 0.14, 0.6, 0.1, dark, 0.4, { Layer = 7, Shade = true }) -- cap
 	p.Gloss(0.38, 0.5, 0.12, 0.05, 8)
+end
+
+-- A cut gem (vertex): a tilted square with a lighter facet.
+function DRAW.Gem(p, color: Color3?)
+	local c = color or rgb(175, 120, 255)
+	p.Shape(0.5, 0.5, 0.6, 0.6, c, 0.22, { Rotation = 45, Shade = true })
+	p.Shape(0.5, 0.42, 0.3, 0.3, c:Lerp(WHITE, 0.45), 0.2, { Rotation = 45, Layer = 1, StrokeScale = 0.5 })
+	p.Gloss(0.4, 0.3, 0.12, 0.08)
+end
+
+-- A round trampoline seen from the side: mat, rim and legs.
+function DRAW.Trampoline(p, color: Color3?)
+	local c = color or rgb(255, 140, 205)
+	local dark = rgb(70, 70, 90)
+	p.Shape(0.26, 0.74, 0.08, 0.3, dark, 0.4) -- legs
+	p.Shape(0.74, 0.74, 0.08, 0.3, dark, 0.4)
+	p.Shape(0.5, 0.56, 0.9, 0.24, c, 0.5, { Layer = 1, Shade = true }) -- rim
+	p.Shape(0.5, 0.52, 0.66, 0.12, rgb(40, 40, 60), 0.5, { Layer = 2, StrokeScale = 0.5 }) -- mat
+	p.Shape(0.5, 0.2, 0.08, 0.16, WHITE, 0.5, { StrokeScale = 0.6 }) -- bounce lines
+	p.Shape(0.32, 0.26, 0.07, 0.12, WHITE, 0.5, { Rotation = -25, StrokeScale = 0.6 })
+	p.Shape(0.68, 0.26, 0.07, 0.12, WHITE, 0.5, { Rotation = 25, StrokeScale = 0.6 })
 end
 
 function DRAW.Cart(p)

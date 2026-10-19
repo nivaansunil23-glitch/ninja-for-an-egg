@@ -1,5 +1,6 @@
 --!nonstrict
--- Puts your best Shoes on your feet and your best Coil on your back
+-- Puts your Shoes on your feet and your Coil on your back (your best, or the
+-- ones you picked in the Inventory)
 -- (GearConfig), built from smooth Parts welded to the character so everyone
 -- sees them. Works on R15 (LeftFoot / RightFoot, UpperTorso) and R6 (the
 -- bottom of Left Leg / Right Leg, Torso). Also sets the player attributes the
@@ -141,8 +142,8 @@ end
 function Wearables.Refresh(player: Player)
 	local data = PlayerData.Get(player)
 	local owned = data and data.Gear or {}
-	local shoeTier = GearConfig.BestTier(owned, "Shoes")
-	local coilTier = GearConfig.BestTier(owned, "Coil")
+	local shoeTier = GearConfig.UsedTier(owned, "Shoes", data and data.EquippedShoes)
+	local coilTier = GearConfig.UsedTier(owned, "Coil", data and data.EquippedCoil)
 	local shoe = GearConfig.Get("Shoes", shoeTier)
 	local coil = GearConfig.Get("Coil", coilTier)
 	player:SetAttribute("ShoeTier", shoeTier)

@@ -25,6 +25,16 @@ function VertexConfig.Multiplier(tier: number?): number
 	return if entry then entry.Multiplier else 1
 end
 
+-- The vertex you use: the one you picked in the Inventory (equipped) if you
+-- own it, else your best. owned = VertexTier (you own every tier up to it).
+function VertexConfig.UsedTier(owned: number?, equipped: number?): number
+	owned = owned or 1
+	if type(equipped) == "number" and equipped >= 1 and equipped <= owned and VertexConfig.Tiers[equipped] then
+		return equipped
+	end
+	return owned
+end
+
 -- Short text for the shop, e.g. "x1.08 Jump".
 function VertexConfig.PerkText(entry): string
 	return `x{entry.Multiplier} Jump`

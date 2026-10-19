@@ -338,7 +338,7 @@ function Hud.Build(gui: ScreenGui, actions)
 	local indexButton = wideButton(left, "Book", "Index", CYAN, 2, actions.Index)
 	local setIndexBadge = badge(indexButton)
 
-	-- Right: Pets.
+	-- Right: Inventory (pets, gear, vertices, trampolines).
 	local right = Instance.new("Frame")
 	right.Name = "RightButtons"
 	right.BackgroundTransparency = 1
@@ -353,7 +353,7 @@ function Hud.Build(gui: ScreenGui, actions)
 	rightLayout.Parent = right
 	fitted(right)
 
-	local petsButton = squareButton(right, "Paw", "Pets", 1, actions.Inventory)
+	local petsButton = squareButton(right, "Bag", "Inventory", 1, actions.Inventory)
 	local setPetBadge = badge(petsButton)
 
 	local function updateBadges()

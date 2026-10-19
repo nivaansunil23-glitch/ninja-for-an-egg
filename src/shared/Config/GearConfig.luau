@@ -2,7 +2,8 @@
 -- discussed later").
 --
 -- Two upgrade lines, bought in order (tier 2 needs tier 1 and so on), kept
--- forever, and worn automatically (your best one of each), no holding:
+-- forever, and worn automatically (your best one of each, or the one you
+-- picked in the Inventory: data.EquippedShoes / EquippedCoil), no holding:
 --   Shoes  go on your feet. Each tier lets you fall further while carrying an
 --          egg before it cracks (SafeFall studs added to the safe drop, EggCarry).
 --   Coil   a spring on your back. Each tier adds jump power (JumpMultiplier).
@@ -168,6 +169,16 @@ function GearConfig.BestTier(owned, line: string): number
 		end
 	end
 	return best
+end
+
+-- The tier you wear in a line: the one you picked (equipped, from the
+-- Inventory) if you own it, else your best (0 = none).
+function GearConfig.UsedTier(owned, line: string, equipped: number?): number
+	local item = type(equipped) == "number" and equipped >= 1 and GearConfig.Get(line, equipped)
+	if item and owned and owned[item.Id] then
+		return equipped :: number
+	end
+	return GearConfig.BestTier(owned, line)
 end
 
 return GearConfig

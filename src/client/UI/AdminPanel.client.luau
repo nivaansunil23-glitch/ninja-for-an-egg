@@ -237,12 +237,19 @@ buttonRow(moneyCard, rowY(1), {
 })
 
 -- Gear card: own every shoe + coil tier to try them on, or take them all off.
+-- Row 2: every shop item for the Inventory, and the jump control's ends.
 local gearY = moneyY + moneyHeight + GAP
-local gearCard, gearHeight = card("GearCard", "Gear", gearY, 1)
+local gearCard, gearHeight = card("GearCard", "Gear", gearY, 2)
 buttonRow(gearCard, rowY(1), {
 	{ "All Gear", Theme.Colors.Mint, function() run("AllGear", 0) end },
 	{ "No Gear", Theme.Colors.Red, function() run("NoGear", 0) end },
 	{ "All Trampolines", Theme.Colors.Sky, function() run("AllTrampolines", 0) end },
+})
+buttonRow(gearCard, rowY(2), {
+	{ "Own All Items", Theme.Colors.Mint, function() run("AllItems", 0) end },
+	{ "No Items", Theme.Colors.Red, function() run("NoItems", 0) end },
+	{ "Jump: Base", Theme.Colors.Orange, function() run("JumpChoice", 1) end },
+	{ "Jump: Max", Theme.Colors.Purple, function() run("JumpChoice", 0) end },
 })
 
 -- Day/night card: force a phase, skip to the next one, or reset island eggs.

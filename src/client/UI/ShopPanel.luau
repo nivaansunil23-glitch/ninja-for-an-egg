@@ -406,7 +406,7 @@ function ShopPanel.new(gui: ScreenGui)
 			for gearId, entry in cards do
 				local gear = entry.Gear
 				local price = gear.Price
-				local best = gear.Line and GearConfig.BestTier(owned, gear.Line) or 0
+				local best = gear.Line and GearConfig.UsedTier(owned, gear.Line, ClientState.Data and ClientState.Data["Equipped" .. gear.Line]) or 0
 				local before = gear.Tier and GearConfig.Get(gear.Line, gear.Tier - 1)
 				if owned[gearId] then
 					local wearing = gear.Tier == best
@@ -414,7 +414,7 @@ function ShopPanel.new(gui: ScreenGui)
 					Components.SetColors(entry.Button, Theme.Colors.Mint)
 					entry.StockLabel.Text = if wearing then "WEARING" else "OWNED"
 					Components.SetColors(entry.Stock, Theme.Colors.Sky)
-					entry.Note.Text = if wearing then (if gear.Line == "Shoes" then "On your feet" else "On your back") else "You have a better one"
+					entry.Note.Text = if wearing then (if gear.Line == "Shoes" then "On your feet" else "On your back") else "Wear it from your Inventory"
 					entry.Note.TextColor3 = Theme.DarkText
 				elseif before and not owned[before.Id] then
 					entry.Label.Text = Format.Money(price)
