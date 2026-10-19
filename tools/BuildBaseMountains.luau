@@ -10,7 +10,7 @@
 -- "LOW-POLY Mountain-Border" 6865341186 and "Low-Poly Mountain Wall" 6865334143,
 -- scripts stripped) and IslandChunk (grass cap + rock cone for the ledges).
 --
--- Kept clear: pens, shops, trampolines, spawn and ponds (+8 studs), the base's
+-- Kept clear: pens, shops, trampolines, spawn and ponds (+6 studs), the base's
 -- floating islets, and the Gap1 cloud zone (pillars poke in 10 studs at most).
 -- Tops stay under Y 140, below Island1 and the Gap2 cloud zone.
 
@@ -94,15 +94,15 @@ local function protectedAt(d, span)
 	end
 	return m
 end
--- Inner face of the cliff ring: hugs the pens, shops and ponds (+8) so the open
+-- Inner face of the cliff ring: hugs the pens, shops and ponds (+6) so the open
 -- middle stays small (user, 2026-10-19), never past the island edge.
-local MIN_FRONT = 140
+local MIN_FRONT = 135
 local function frontLine(d, span)
 	local p = 0
 	for k = -6, 6 do
 		p = math.max(p, protectedAt(d + k, span))
 	end
-	return math.min(edgeAt(d) - 5, math.max(MIN_FRONT, p + 8))
+	return math.min(edgeAt(d) - 5, math.max(MIN_FRONT, p + 6))
 end
 
 -- Windows line up with the base Rim's six gaps.
@@ -132,8 +132,10 @@ local function windowMul(t)
 	return 0.55 + 0.45 * smooth((nearestWindow(t) - WIN_HALF) / 16)
 end
 
--- Gap1 cloud zone (base to Island1), X -198..122, Z -160..160.
-local BOX_MIN, BOX_MAX = Vector2.new(-198, -160), Vector2.new(122, 160)
+-- Gap1 cloud zone (base to Island1), read live (X -160..122, Z -160..160 on 2026-10-19).
+local gap1 = map.CloudZones.Gap1
+local BOX_MIN = Vector2.new(gap1.Position.X - gap1.Size.X / 2, gap1.Position.Z - gap1.Size.Z / 2)
+local BOX_MAX = Vector2.new(gap1.Position.X + gap1.Size.X / 2, gap1.Position.Z + gap1.Size.Z / 2)
 local function boxIntrusion(x, z, radius)
 	local dx = math.max(BOX_MIN.X - x, 0, x - BOX_MAX.X)
 	local dz = math.max(BOX_MIN.Y - z, 0, z - BOX_MAX.Y)
@@ -233,10 +235,11 @@ local function makePillar(kind, x, z, bottomY, topY, W)
 end
 
 -- Front row low and chunky, back row tall. inner = studs past the front line.
+-- Rows packed close (2026-10-19) so the ring, and the island under it, stays thin.
 local ROWS = {
 	{ name = "Front", kind = function() return "A" end, W = { 20, 30 }, top = { 24, 46 }, inner = { -1, 2 }, bottom = -8, step = 0.68 },
-	{ name = "Mid", kind = function() return if rng:NextNumber() < 0.5 then "A" else "B" end, W = { 26, 38 }, top = { 46, 86 }, inner = { 8, 14 }, bottom = -14, step = 0.72 },
-	{ name = "Back", kind = function() return "B" end, W = { 34, 48 }, top = { 70, 132 }, inner = { 20, 28 }, bottom = -24, step = 0.75 },
+	{ name = "Mid", kind = function() return if rng:NextNumber() < 0.5 then "A" else "B" end, W = { 24, 34 }, top = { 46, 86 }, inner = { 6, 10 }, bottom = -14, step = 0.72 },
+	{ name = "Back", kind = function() return "B" end, W = { 30, 42 }, top = { 70, 132 }, inner = { 14, 20 }, bottom = -24, step = 0.75 },
 }
 
 local plan = {}
@@ -318,8 +321,8 @@ for k = 1, #WINDOWS do
 	local n = math.max(2, math.ceil(len / 9) + 1)
 	for j = 0, n - 1 do
 		local d = (a + len * j / (n - 1)) % 360
-		local D = rng:NextNumber(96, 112)
-		local r = frontLine(d, 12) + 30
+		local D = rng:NextNumber(84, 96)
+		local r = frontLine(d, 12) + 24
 		local x, z = math.cos(math.rad(d)) * r, math.sin(math.rad(d)) * r
 		local capY = -0.22 - 0.08 * (nLedge % 4) -- staggered so overlapping caps don't flicker
 		local tries = 0
