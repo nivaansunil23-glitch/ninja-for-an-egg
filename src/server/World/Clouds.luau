@@ -267,7 +267,7 @@ local function edgeAlong(ground: { Instance }, from: Vector3, dir: Vector3, topY
 end
 
 -- Places clouds must leave alone: a little room over the launch trampoline (the
--- base's paths start on it, user 2026-10-19), and some room over the training
+-- base's paths start right beside it, user 2026-10-19), and some room over the training
 -- trampolines and spawn points.
 -- { Center (Vector3), Radius, Bottom, Top }
 local function keepOutZones()
@@ -504,21 +504,22 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 	local fromGround = if fromIsland then groundOf(fromIsland) else nil
 	local fromCenter = if fromIsland and fromIsland ~= base then flat(islandCenter(fromIsland)) else axis
 
-	-- On the base every path starts on top of the launch trampoline.
-	local launchStart: Vector3? = nil
+	-- On the base every path starts on the ground just beside the launch
+	-- trampoline, each on its own side of it (towards where that path heads).
+	local launchPad: { Center: Vector3, Radius: number }? = nil
 	if not fromIsland or fromIsland == base then
 		for _, trampoline in Trampolines.GetAll(Trampolines.Launch) do
 			local info = Trampolines.GetPadInfo(trampoline)
 			if info then
-				launchStart = Vector3.new(info.Center.X, info.Top, info.Center.Z)
+				launchPad = { Center = flat(info.Center), Radius = info.Radius }
 				break
 			end
 		end
 	end
 
 	-- Start on the ground below, at the edge of the island below in the
-	-- direction of where the path's guide begins (on the base: the launch trampoline,
-	-- or right under the guide if there isn't one).
+	-- direction of where the path's guide begins (on the base: beside the launch
+	-- trampoline, or right under the guide if there isn't one).
 	local function findStart(angle: number, r: number): Plan
 		local start: Plan = { Pos = Vector3.zero, Inner = 0, Outer = 0, Thickness = 0, Yaw = 0, Ground = true }
 		local target = axis + Vector3.new(math.cos(angle), 0, math.sin(angle)) * r
@@ -528,8 +529,11 @@ local function planZone(zone: BasePart, rng: Random, keepOut)
 			local edge, edgeY = edgeAlong(fromGround, fromCenter, dir, fromTop)
 			local point = fromCenter + dir * math.max(edge - 3, 0)
 			start.Pos = Vector3.new(point.X, edgeY, point.Z)
-		elseif launchStart then
-			start.Pos = launchStart
+		elseif launchPad then
+			local dir = flatUnit(target - launchPad.Center) or Vector3.xAxis
+			local point = launchPad.Center + dir * (launchPad.Radius + CloudConfig.LaunchStartGap)
+			local y = if fromGround then surfaceAt(fromGround, point.X, point.Z, fromTop) else nil
+			start.Pos = Vector3.new(point.X, y or fromTop, point.Z)
 		elseif fromGround then
 			local dir = flatUnit(axis - target)
 			local distance = flat(axis - target).Magnitude

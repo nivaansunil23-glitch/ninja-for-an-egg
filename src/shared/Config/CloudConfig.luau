@@ -170,10 +170,11 @@ CloudConfig.ShowSigns = true
 CloudConfig.MeshId = "rbxassetid://5515652172"
 
 -- Room kept round the launch trampoline: LaunchClearance studs out from its
--- edge, LaunchHeadroom studs above its mat. Clouds go above that (the base's
--- paths start on it).
+-- edge, LaunchHeadroom studs above its mat. Each of the base's paths starts on
+-- the ground LaunchStartGap studs out from its edge, on that path's side.
 CloudConfig.LaunchClearance = 3
 CloudConfig.LaunchHeadroom = 8
+CloudConfig.LaunchStartGap = 8
 
 -- Search limits for each path's walk.
 CloudConfig.Attempts = 40
