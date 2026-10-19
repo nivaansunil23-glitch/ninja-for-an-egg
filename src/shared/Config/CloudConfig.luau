@@ -169,8 +169,11 @@ CloudConfig.ShowSigns = true
 -- ServerStorage.ToolboxAssets.Cloud, else this mesh id.
 CloudConfig.MeshId = "rbxassetid://5515652172"
 
--- Studs kept clear around the launch trampoline's column, all the way up.
+-- Room kept round the launch trampoline: LaunchClearance studs out from its
+-- edge, LaunchHeadroom studs above its mat. Clouds go above that (the base's
+-- paths start on it).
 CloudConfig.LaunchClearance = 3
+CloudConfig.LaunchHeadroom = 8
 
 -- Search limits for each path's walk.
 CloudConfig.Attempts = 40
